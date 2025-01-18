@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Prostate Biopsy - Single Cell per Report</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Prostate Biopsy Comparison (Targets Simplified)</h1>
+
+    <div class="report-input-section">
+      <label for="reportText">Paste One or More Reports:</label>
+      <textarea id="reportText" placeholder="Paste multiple biopsy reports here..."></textarea>
+      <button id="processMultipleBtn">Add to Comparison</button>
+    </div>
+
+    <hr />
+
+    <h2>Comparison Table</h2>
+    <div id="comparisonTableWrapper">
+      <table id="comparisonTable">
+        <thead>
+          <!-- Row 1: Sample, Location, then 1 col per report date -->
+        </thead>
+        <tbody>
+          <!-- 1 row per sample, columns => [Sample, Location, then 1 cell per report with combined data] -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

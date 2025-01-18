@@ -1,0 +1,95 @@
+/* 
+   Minimal styling, letting the browser auto-fit columns.
+   The location column will grow as needed to accommodate
+   the longest location text (e.g. "Target 999"), etc.
+*/
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f7f7f7;
+  color: #333;
+  font-size: 14px;
+}
+
+.container {
+  width: 90%;
+  margin: 20px auto;
+  background: #fff;
+  padding: 20px;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+h1, h2 {
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.report-input-section {
+  margin-bottom: 15px;
+}
+
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+#reportText {
+  width: 100%;
+  height: 120px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+button {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+#comparisonTableWrapper {
+  /* Let the table auto-size, no forced scrolling or fixed layout */
+  overflow-x: auto;
+}
+
+#comparisonTable {
+  border-collapse: collapse;
+  /* "auto" layout so columns fit content */
+  table-layout: auto; 
+  width: auto; 
+  margin: 0 auto;
+}
+
+#comparisonTable th,
+#comparisonTable td {
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap; /* keep content on one line if you want truly minimal wrapping */
+}
+
+#comparisonTable thead th {
+  background-color: #f1f1f1;
+  text-align: center;
+  font-weight: bold;
+}
