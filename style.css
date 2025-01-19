@@ -1,8 +1,4 @@
-/* 
-   Minimal styling, letting the browser auto-fit columns.
-   The location column will grow as needed to accommodate
-   the longest location text (e.g. "Target 999"), etc.
-*/
+/* Minimal styling */
 
 html, body {
   margin: 0;
@@ -31,15 +27,26 @@ h1, h2 {
   text-align: center;
 }
 
+.nccn-inputs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.nccn-inputs label {
+  font-weight: bold;
+}
+
 .report-input-section {
   margin-bottom: 15px;
 }
 
 label {
   display: block;
-  font-weight: bold;
   margin-bottom: 5px;
   font-size: 14px;
+  font-weight: bold;
 }
 
 #reportText {
@@ -66,16 +73,25 @@ button:hover {
   background-color: #0056b3;
 }
 
+.nccn-output {
+  margin: 10px 0;
+  font-size: 15px;
+}
+
+#nccnRiskResult {
+  margin-left: 8px;
+  color: #d9534f; /* e.g. red color for emphasis */
+  font-weight: bold;
+}
+
 #comparisonTableWrapper {
-  /* Let the table auto-size, no forced scrolling or fixed layout */
   overflow-x: auto;
 }
 
 #comparisonTable {
   border-collapse: collapse;
-  /* "auto" layout so columns fit content */
-  table-layout: auto; 
-  width: auto; 
+  table-layout: auto;
+  width: auto;
   margin: 0 auto;
 }
 
@@ -85,7 +101,7 @@ button:hover {
   padding: 6px 10px;
   text-align: left;
   font-size: 13px;
-  white-space: nowrap; /* keep content on one line if you want truly minimal wrapping */
+  white-space: nowrap; 
 }
 
 #comparisonTable thead th {
