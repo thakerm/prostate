@@ -1,169 +1,215 @@
-/***************************************************************
- * GLOBAL: allReports[] holds multiple parsed reports
- ***************************************************************/
+/*********************************************************************
+ * 1) GLOBAL DATA: allReports[] holds multiple reports, each with:
+ *    {
+ *      date: "12/6/2023",    // from "Collected: ..."
+ *      samples: [ ... ],    // parsed A/B/C sample data
+ *      maxGleasonSum: number,
+ *      nccnRisk: "Low"|"Intermediate"|...,
+ *      ...
+ *    }
+ *********************************************************************/
 let allReports = [];
 
-/***************************************************************
- * 1) Event: "Process Reports"
- *    - Grab user inputs (PSA range + T stage)
- *    - Parse the text => multiple reports
- *    - Build table
- *    - Compute highest Gleason sum => calc NCCN risk
- ***************************************************************/
+/*********************************************************************
+ * 2) EVENT: "Process Reports"
+ *    - Split text by "Provider:" => multiple chunks
+ *    - For each chunk, parse "FINAL PATHOLOGIC DIAGNOSIS" ignoring disclaimers, etc.
+ *    - Extract sample data, find max Gleason => compute nccn risk
+ *    - Build comparison table, show risk of the newest report
+ *********************************************************************/
 document.getElementById("processBtn").addEventListener("click", () => {
   const rawText = document.getElementById("reportText").value.trim();
   if (!rawText) {
-    alert("Please paste at least one report.");
+    alert("Please paste at least one pathology report.");
     return;
   }
 
-  // 1) Get user selections
-  const psaRange = document.getElementById("psaSelect").value; // "<10", "10-20", ">20"
-  const tStage = document.getElementById("stageSelect").value; // e.g. "T2b"
+  // 1) get PSA range + T stage
+  const psaRange = document.getElementById("psaSelect").value; 
+  const tStage = document.getElementById("stageSelect").value;
 
-  // 2) Split text into multiple reports
+  // 2) chunk by "Provider:"
   const chunks = chunkReports(rawText);
   if (!chunks.length) {
-    alert("No valid reports found. Checking 'Provider:' markers.");
+    alert("No valid reports found. Checking for 'Provider:' lines.");
     return;
   }
 
-  // Clear any old data
-  allReports = [];
+  allReports = []; // reset
 
-  // 3) Parse each chunk
-  chunks.forEach((chunk) => {
-    const parsed = parseSingleReport(chunk);
-    const finalDate = parsed.collectedDate || "Unknown";
-    if (!parsed.samples.length && finalDate === "Unknown") return;
+  // 3) parse each chunk
+  chunks.forEach(chunk => {
+    // parse final dx lines ignoring disclaimers
+    const date = parseCollectedDate(chunk) || "Unknown";
+    const finalDxLines = extractFinalDxLines(chunk);
+    const samples = parseSamplesFromDx(finalDxLines);
+
+    // find highest gleason in these samples
+    const maxG = findMaxGleasonSum(samples);
+    // compute risk
+    const riskGroup = calcNCCNRiskGroup(psaRange, maxG, tStage);
 
     allReports.push({
-      date: finalDate,
-      samples: parsed.samples
+      date,
+      samples,
+      maxGleasonSum: maxG,
+      nccnRisk: riskGroup
     });
   });
 
-  // 4) Sort by date desc
+  // 4) sort desc by date
   sortReportsByDateDesc(allReports);
 
-  // 5) Build table
+  // 5) build table
   buildComparisonTable(allReports);
 
-  // 6) Find highest Gleason sum
-  const maxGleason = findMaxGleasonSum(allReports);
-
-  // 7) Compute simplified NCCN risk
-  const riskGroup = calcNCCNRiskGroup(psaRange, maxGleason, tStage);
-
-  // 8) Display
-  document.getElementById("nccnRiskResult").textContent = riskGroup;
+  // 6) show the risk of the newest (index 0)
+  if (allReports.length > 0) {
+    document.getElementById("nccnRiskResult").textContent = allReports[0].nccnRisk;
+  } else {
+    document.getElementById("nccnRiskResult").textContent = "N/A";
+  }
 });
 
-/***************************************************************
- * chunkReports => detect multiple "Provider:" blocks
- ***************************************************************/
+/*********************************************************************
+ * chunkReports: split text by lines that start with "Provider:"
+ *********************************************************************/
 function chunkReports(raw) {
-  const splitted = raw.split(/(?=^Provider:\s)/im);
-  return splitted.map(s => s.trim()).filter(Boolean);
+  return raw.split(/(?=^Provider:\s)/im)
+            .map(s => s.trim())
+            .filter(Boolean);
 }
 
-/***************************************************************
- * parseSingleReport => { collectedDate, samples[] }
- ***************************************************************/
-function parseSingleReport(txt) {
-  const date = parseCollectedDate(txt);
-  const samples = parseSamples(txt);
-  return { collectedDate: date, samples };
-}
-
-/***************************************************************
- * parseCollectedDate => "Collected: 12/6/2023"
- ***************************************************************/
+/*********************************************************************
+ * parseCollectedDate: e.g. "Collected: 12/6/2023"
+ *********************************************************************/
 function parseCollectedDate(text) {
   const m = text.match(/Collected:\s*([0-9\/-]+)/i);
   return m ? m[1].trim() : "";
 }
 
-/***************************************************************
- * parseSamples => multi-line approach for A), B), ...
- ***************************************************************/
-function parseSamples(text) {
-  const lines = text.split(/\r?\n/);
-  const samples = [];
+/*********************************************************************
+ * extractFinalDxLines(chunk):
+ *   1) find "FINAL PATHOLOGIC DIAGNOSIS"
+ *   2) read lines until "Comment", "Gross Description", "Clinical History", ...
+ *   3) skip disclaimers, sign-offs, blank lines, etc.
+ *********************************************************************/
+function extractFinalDxLines(reportText) {
+  const lines = reportText.split(/\r?\n/).map(l => l.trim());
+  let inFinalDx = false;
+  let dxLines = [];
 
-  let curr = null;
+  for (let line of lines) {
+    if (/^FINAL\s+PATHOLOGIC\s+DIAGNOSIS/i.test(line)) {
+      inFinalDx = true;
+      continue;
+    }
+    if (!inFinalDx) continue; // skip until we see final dx start
+
+    // if we see these headings => stop
+    if (/^Comment\s*$/i.test(line)) break;
+    if (/^Gross\s+Description\s*$/i.test(line)) break;
+    if (/^Clinical\s+History\s*$/i.test(line)) break;
+    if (/^Specimen\(s\)\s*Received/i.test(line)) break;
+    if (/^FHIR\s+Pathology/i.test(line)) break;
+
+    // skip disclaimers / signature lines
+    if (/disclaimer/i.test(line)) continue;
+    if (/immunohistochemistry/i.test(line)) continue;
+    if (/\*\*\s*Report\s*Electronically\s*Signed\s*by/i.test(line)) continue;
+    if (/electronically\s*signed\s*by/i.test(line)) continue;
+
+    if (!line) continue; // skip blank
+
+    dxLines.push(line);
+  }
+  return dxLines;
+}
+
+/*********************************************************************
+ * parseSamplesFromDx: looks for "A) ", "B) ", etc.
+ *********************************************************************/
+function parseSamplesFromDx(dxLines) {
+  const samples = [];
+  let current = null;
+
   const sampleHeaderRegex = /^([A-Z])[\.\)]\s*(.*)/;
 
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    const headerMatch = trimmed.match(sampleHeaderRegex);
-    if (headerMatch) {
-      if (curr) samples.push(finalizeSample(curr));
-      curr = {
-        label: headerMatch[1],
-        locLines: [],
-        diagLines: [],
-        foundDx: false
+  dxLines.forEach(line => {
+    const match = line.match(sampleHeaderRegex);
+    if (match) {
+      if (current) {
+        samples.push(finalizeSample(current));
+      }
+      current = {
+        sampleLabel: match[1],
+        locationLines: [],
+        diagnosisLines: [],
+        foundDiagnosis: false
       };
-      if (headerMatch[2]) curr.locLines.push(headerMatch[2].trim());
-    } else if (curr) {
-      if (trimmed.startsWith("-")) {
-        curr.foundDx = true;
-        curr.diagLines.push(trimmed.replace(/^-+\s*/, ""));
+      if (match[2]) current.locationLines.push(match[2].trim());
+    }
+    else if (current) {
+      if (line.startsWith("-")) {
+        current.foundDiagnosis = true;
+        current.diagnosisLines.push(line.replace(/^-+\s*/, ""));
       } else {
-        if (!curr.foundDx) curr.locLines.push(trimmed);
-        else curr.diagLines.push(trimmed);
+        if (!current.foundDiagnosis) {
+          current.locationLines.push(line);
+        } else {
+          current.diagnosisLines.push(line);
+        }
       }
     }
   });
-  if (curr) samples.push(finalizeSample(curr));
+
+  if (current) {
+    samples.push(finalizeSample(current));
+  }
   return samples;
 }
 
-/***************************************************************
- * finalizeSample => parse location, diagnosis, gleason, etc.
- ***************************************************************/
+/*********************************************************************
+ * finalizeSample => combine location & diagnosis lines,
+ *                   extract short summary
+ *********************************************************************/
 function finalizeSample(s) {
-  const locRaw = s.locLines.join(" ");
-  const shortLoc = parseLocation(locRaw, s.label);
+  // location
+  const rawLoc = s.locationLines.join(" ");
+  const location = parseLocation(rawLoc, s.sampleLabel);
 
-  const diagText = s.diagLines.join(" ");
-  const shortDx = parseShortDiagnosis(diagText);
-  const gl = extractGleasonScore(diagText);
+  // diagnosis text
+  let diagText = s.diagnosisLines.join(" ");
+  diagText = diagText.replace(/\s+/g, " ").trim();
+
+  // glean fields
+  const dxShort = parseShortDiagnosis(diagText);
+  const gleason = extractGleasonScore(diagText);
   const cpos = extractCoresPositive(diagText);
   const size = extractMaxCoreSize(diagText);
 
   return {
-    sampleLabel: s.label,
-    location: shortLoc,
-    diagnosis: shortDx, 
-    gleasonScore: gl, // e.g. "3+4=7"
+    sampleLabel: s.sampleLabel,
+    location,
+    diagnosis: dxShort,
+    gleasonScore: gleason,
     coresPositive: cpos,
     maxCoreSize: size
   };
 }
 
-function parseLocation(loc, label) {
-  let str = loc.replace(/PROSTATE[^,]*,\s*/i, "");
-  str = str.replace(/NEEDLE\s*CORE\s*BIOPSY/i, "");
-  str = str.replace(/LESION\s*ZONE\s*[A-Z]+\s*-\s*/i, "");
-  str = str.replace(/\bMRI\s*DIRECTED\s*\b.*$/i, "");
-  str = str.replace(/\s+:\s*$/, "");
-  str = str.trim();
-
-  // if "target #1" => "Target 1"
-  str = str.replace(/target\s*#(\d+)/i, "Target $1");
-  const match = str.match(/(Target\s*\d+)/i);
-  if (match) {
-    str = match[1];
+/*********************************************************************
+ * parseLocation => remove prefixes like "PROSTATE NEEDLE BX -"
+ *********************************************************************/
+function parseLocation(text, label) {
+  let loc = text;
+  loc = loc.replace(/^PROSTATE\s*NEEDLE\s*BX\s*-\s*/i, "");
+  loc = loc.replace(/^PROSTATE,\s*NEEDLE\s*CORE\s*BIOPSY\s*-\s*/i, "");
+  loc = loc.replace(/:\s*$/, "");
+  if (loc.startsWith(label + " ")) {
+    loc = loc.slice(label.length + 1);
   }
-
-  // remove leading label + space
-  if (str.startsWith(label + " ")) {
-    str = str.slice(label.length + 1);
-  }
-
-  return str || "N/A";
+  return loc.trim();
 }
 
 function parseShortDiagnosis(txt) {
@@ -172,18 +218,18 @@ function parseShortDiagnosis(txt) {
   return "N/A";
 }
 
-/***************************************************************
- * Gleason => "3+4=7" or "N/A"
- ***************************************************************/
+/*********************************************************************
+ * extractGleasonScore => "3+4=7"
+ *********************************************************************/
 function extractGleasonScore(text) {
   const m = text.match(/gleason\s*(score)?\s*(\d+\s*\+\s*\d+\s*=\s*\d+)/i);
   if (m) return m[2].replace(/\s+/g, "");
   return "N/A";
 }
 
-/***************************************************************
- * Cores => "2/3(67%)" or "N/A"
- ***************************************************************/
+/*********************************************************************
+ * extractCoresPositive => "4/6(67%)"
+ *********************************************************************/
 function extractCoresPositive(text) {
   let m = text.match(/involving\s*(\d+)\s*of\s*(\d+)\s*cores/i);
   if (m) return formatCores(m[1], m[2]);
@@ -206,104 +252,69 @@ function formatCores(x, y) {
   return "N/A";
 }
 
-/***************************************************************
- * Size => "5mm" or "N/A"
- ***************************************************************/
+/*********************************************************************
+ * extractMaxCoreSize => "5mm"
+ *********************************************************************/
 function extractMaxCoreSize(text) {
-  const norm = text.replace(/\s+/g, " ").toLowerCase();
-  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+(\d+)\s*mm\s*core/g;
+  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+(\d+)\s*mm\s*core/gi;
   let match;
   let maxSize = null;
-  while ((match = pattern.exec(norm)) !== null) {
+  const lower = text.toLowerCase();
+
+  while ((match = pattern.exec(lower)) !== null) {
     const sz = parseInt(match[1], 10);
     if (maxSize === null || sz > maxSize) {
       maxSize = sz;
     }
   }
-  return maxSize === null ? "N/A" : `${maxSize}mm`;
+  if (maxSize === null) return "N/A";
+  return `${maxSize}mm`;
 }
 
-/***************************************************************
- * findMaxGleasonSum(reports)
- * scans all samples => highest sum from e.g. "3+4=7" => 7
- ***************************************************************/
-function findMaxGleasonSum(reports) {
+/*********************************************************************
+ * findMaxGleasonSum(samples): returns numeric sum e.g. 7
+ *********************************************************************/
+function findMaxGleasonSum(samples) {
   let maxSum = 0;
-  reports.forEach(r => {
-    r.samples.forEach(s => {
-      if (s.gleasonScore && s.gleasonScore !== "N/A") {
-        const sumMatch = s.gleasonScore.match(/(\d+)\+\d+=(\d+)/);
-        if (sumMatch) {
-          const sumVal = parseInt(sumMatch[2], 10);
-          if (sumVal > maxSum) {
-            maxSum = sumVal;
-          }
+  samples.forEach(s => {
+    if (s.gleasonScore && s.gleasonScore !== "N/A") {
+      const m = s.gleasonScore.match(/(\d+)\+\d+=(\d+)/);
+      if (m) {
+        const sumVal = parseInt(m[2], 10);
+        if (sumVal > maxSum) {
+          maxSum = sumVal;
         }
       }
-    });
+    }
   });
   return maxSum;
 }
 
-/***************************************************************
- * calcNCCNRiskGroup(psaRange, maxGleason, tStage)
- * Very simplified logic:
- *  - if T1c + Gleason <=6 + PSA<10 => Very Low
- *  - if T1-T2a + Gleason<=6 + PSA<10 => Low
- *  - if Gleason=7 or T2 + PSA 10-20 => Intermediate
- *  - if Gleason>=8 or T3 or PSA>20 => High/VeryHigh
- ***************************************************************/
+/*********************************************************************
+ * calcNCCNRiskGroup => simplified
+ *********************************************************************/
 function calcNCCNRiskGroup(psaRange, gleasonSum, tStage) {
-  // convert T2a => stageNum=2, T3b =>3...
   const stageNum = parseTStageNumber(tStage);
 
-  // Convert PSA range to numeric range
-  let minPSA = 0;
-  let maxPSA = 9999; 
-  if (psaRange === "<10") {
-    maxPSA = 10;
-  } else if (psaRange === "10-20") {
-    minPSA = 10; 
-    maxPSA = 20;
-  } else if (psaRange === ">20") {
-    minPSA = 20.1;
-  }
+  const isPSAunder10 = (psaRange === "<10");
+  const isPSA10to20 = (psaRange === "10-20");
+  const isPSAover20 = (psaRange === ">20");
 
-  // We'll define boolean checks:
-  const isPSAunder10 = (maxPSA <= 10);
-  const isPSA10to20 = (minPSA === 10 && maxPSA === 20);
-  const isPSAover20 = (minPSA > 20);
-
-  // 1) Very Low
-  //    T1c, Gleason <=6, PSA <10
   if (tStage === "T1c" && gleasonSum <= 6 && isPSAunder10) {
     return "Very Low";
   }
-
-  // 2) Low
-  //    T1-T2a, Gleason <=6, PSA<10
   if (stageNum <= 2 && gleasonSum <= 6 && isPSAunder10) {
     return "Low";
   }
-
-  // 3) Intermediate
-  //    (T2b or T2c) or Gleason=7 or PSA 10-20 => "Intermediate"
-  //    We won't break out Fav vs Unfav here, just "Intermediate"
-  if (gleasonSum === 7 || (isPSA10to20) || (stageNum === 2)) {
+  if (gleasonSum === 7 || isPSA10to20 || stageNum === 2) {
     return "Intermediate";
   }
-
-  // 4) High/Very High
-  //    Gleason >=8 or T3 or PSA>20 => "High" or "Very High"
   if (gleasonSum >= 8 || stageNum >= 3 || isPSAover20) {
-    // if T3b or T4 => Very High
     if (tStage === "T3b" || tStage === "T4") {
       return "Very High";
     }
     return "High";
   }
-
-  // fallback
   return "Low";
 }
 
@@ -313,20 +324,22 @@ function parseTStageNumber(tStage) {
   return 1;
 }
 
-/***************************************************************
+/*********************************************************************
  * sortReportsByDateDesc => newest first
- ***************************************************************/
-function sortReportsByDateDesc(arr) {
-  arr.sort((a, b) => {
+ *********************************************************************/
+function sortReportsByDateDesc(reps) {
+  reps.sort((a, b) => {
     const dA = Date.parse(a.date);
     const dB = Date.parse(b.date);
     return (isNaN(dB) ? 0 : dB) - (isNaN(dA) ? 0 : dA);
   });
 }
 
-/***************************************************************
- * buildComparisonTable => single cell per report
- ***************************************************************/
+/*********************************************************************
+ * buildComparisonTable(allReports):
+ *    - 1st row: "Sample", "Location", then 1 col per date
+ *    - each row => sample label + location + single cell per report
+ *********************************************************************/
 function buildComparisonTable(reports) {
   const thead = document.querySelector("#comparisonTable thead");
   const tbody = document.querySelector("#comparisonTable tbody");
@@ -336,48 +349,46 @@ function buildComparisonTable(reports) {
   if (!reports.length) return;
 
   // gather sample labels
-  const allLabels = new Set();
+  const allSampleLabels = new Set();
   reports.forEach(r => {
-    r.samples.forEach(s => allLabels.add(s.sampleLabel));
+    r.samples.forEach(s => allSampleLabels.add(s.sampleLabel));
   });
-  const sortedLabels = [...allLabels].sort();
+  const sortedLabels = [...allSampleLabels].sort();
 
-  // header row => Sample, Location, then 1 col per date
+  // build header row
   const hdrRow = document.createElement("tr");
 
-  // Sample
-  const smpTh = document.createElement("th");
-  smpTh.textContent = "Sample";
-  hdrRow.appendChild(smpTh);
+  const sampleTh = document.createElement("th");
+  sampleTh.textContent = "Sample";
+  hdrRow.appendChild(sampleTh);
 
-  // Location
   const locTh = document.createElement("th");
   locTh.textContent = "Location";
   hdrRow.appendChild(locTh);
 
-  // each report => date col
+  // one column per report date
   reports.forEach(r => {
     const th = document.createElement("th");
-    th.textContent = r.date;
+    th.textContent = r.date; // e.g. "12/6/2023"
     hdrRow.appendChild(th);
   });
   thead.appendChild(hdrRow);
 
-  // body => 1 row per sample
+  // build body rows => 1 per sample
   sortedLabels.forEach(label => {
     const row = document.createElement("tr");
 
-    // sample cell
-    const labelTd = document.createElement("td");
-    labelTd.textContent = label;
-    row.appendChild(labelTd);
+    // sample label cell
+    const sampleTd = document.createElement("td");
+    sampleTd.textContent = label;
+    row.appendChild(sampleTd);
 
-    // location => from first that has label
+    // location => from the first report that has it
     let foundLoc = "N/A";
     for (let i = 0; i < reports.length; i++) {
-      const s = reports[i].samples.find(x => x.sampleLabel === label);
-      if (s) {
-        foundLoc = s.location;
+      const sample = reports[i].samples.find(s => s.sampleLabel === label);
+      if (sample) {
+        foundLoc = sample.location;
         break;
       }
     }
@@ -385,28 +396,30 @@ function buildComparisonTable(reports) {
     locTd.textContent = foundLoc;
     row.appendChild(locTd);
 
-    // single cell for each report
-    reports.forEach(rep => {
+    // now each report => single cell summary:
+    // "AdenoCA, G=3+4=7, C=4/6(67%), Sz=5mm"
+    reports.forEach(r => {
       const cell = document.createElement("td");
-      const sample = rep.samples.find(x => x.sampleLabel === label);
-      if (!sample) {
+      const smp = r.samples.find(s => s.sampleLabel === label);
+      if (!smp) {
         cell.textContent = "N/A";
       } else {
-        // build short text e.g. "AdenoCA, G=3+4=7, C=2/3(67%), Sz=5mm"
+        // build short line
         let combined = "";
-        if (sample.diagnosis && sample.diagnosis !== "N/A") {
-          combined += sample.diagnosis;
+        if (smp.diagnosis && smp.diagnosis !== "N/A") {
+          combined += smp.diagnosis;
         }
-        if (sample.gleasonScore && sample.gleasonScore !== "N/A") {
-          combined += (combined ? ", G=" : "G=") + sample.gleasonScore;
+        if (smp.gleasonScore && smp.gleasonScore !== "N/A") {
+          combined += (combined ? ", G=" : "G=") + smp.gleasonScore;
         }
-        if (sample.coresPositive && sample.coresPositive !== "N/A") {
-          combined += (combined ? ", C=" : "C=") + sample.coresPositive;
+        if (smp.coresPositive && smp.coresPositive !== "N/A") {
+          combined += (combined ? ", C=" : "C=") + smp.coresPositive;
         }
-        if (sample.maxCoreSize && sample.maxCoreSize !== "N/A") {
-          combined += (combined ? ", Sz=" : "Sz=") + sample.maxCoreSize;
+        if (smp.maxCoreSize && smp.maxCoreSize !== "N/A") {
+          combined += (combined ? ", Sz=" : "Sz=") + smp.maxCoreSize;
         }
         if (!combined) combined = "N/A";
+
         cell.textContent = combined;
       }
       row.appendChild(cell);
