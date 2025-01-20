@@ -34,29 +34,31 @@ function getHighestNccnRisk(reportArray) {
 }
 
 /**
+ * mapPsaRangeToNumeric: given "<10", "10-20", or ">20", 
+ * returns an approximate numeric value for the nomogram (5, 15, 25).
+ */
+function mapPsaRangeToNumeric(rangeStr) {
+  switch(rangeStr) {
+    case "<10":   return 5;
+    case "10-20": return 15;
+    case ">20":   return 25;
+  }
+  // fallback if not recognized
+  return 5;
+}
+
+/**
  * Convert Gleason sum => approximate Grade Group (1..5)
  */
 function gleasonSumToGGG(sum) {
   if (sum <= 6) return 1;
-  if (sum === 7) return 2;  // or 3 if you know it's 4+3
+  if (sum === 7) return 2; 
   if (sum === 8) return 4;
-  return 5; // 9 or 10 => group 5
-}
-
-/**
- * Map the user-chosen PSA range to a numeric estimate for the nomogram.
- */
-function mapPsaRangeToNumeric(rangeStr) {
-  switch(rangeStr) {
-    case "<10":  return 5;
-    case "10-20":return 15;
-    case ">20":  return 25;
-  }
-  return 5; // fallback
+  return 5; // for 9 or 10
 }
 
 /*********************************************************************
- * 2) EVENT: "Process Reports"
+ * EVENT: "Process Reports"
  *********************************************************************/
 document.getElementById("processBtn").addEventListener("click", () => {
   const rawText = document.getElementById("reportText").value.trim();
@@ -69,15 +71,16 @@ document.getElementById("processBtn").addEventListener("click", () => {
   allReports = [];
   patientDob = null;
 
-  // chunk the input
+  // chunk the input by "Provider:"
   const chunks = chunkReports(rawText);
   if (!chunks.length) {
     alert("No valid reports found (looking for 'Provider:' lines).");
     return;
   }
 
-  // We'll also read the user's PSA & stage for the *overall* risk group,
-  // but that won't necessarily be used in the nomogram unless selected below.
+  // We'll also read the user's PSA & stage for a simplified risk calculation,
+  // but this does not necessarily become the final nomogram input 
+  // unless you specifically want it.
   const psaRange = document.getElementById("psaSelect").value; 
   const tStage = document.getElementById("stageSelect").value;
 
@@ -86,7 +89,7 @@ document.getElementById("processBtn").addEventListener("click", () => {
     const date = parseCollectedDate(chunk) || "Unknown";
     const dobStr = parseDob(chunk);
     if (dobStr && !patientDob) {
-      // If we find a DOB in any chunk, store it (first found).
+      // store the first DOB found
       patientDob = dobStr;
     }
 
@@ -96,7 +99,7 @@ document.getElementById("processBtn").addEventListener("click", () => {
 
     // find highest gleason in these samples
     const maxG = findMaxGleasonSum(samples);
-    // compute risk (we do the simplified logic with user-chosen PSA range & stage)
+    // compute simplified NCCN risk
     const riskGroup = calcNCCNRiskGroup(psaRange, maxG, tStage);
 
     allReports.push({
@@ -148,27 +151,25 @@ document.getElementById("calcNomogramBtn").addEventListener("click", () => {
   });
 
   if (chosenIndex < 0 || !allReports[chosenIndex]) {
-    alert("Please select which biopsy date to use (radio button) before calculating.");
+    alert("Please select which biopsy date to use for the nomogram first.");
     return;
   }
 
-  // Let's also read the user's PSA & T stage from the top
+  // read the user's PSA & T stage from the top
   const psaRange = document.getElementById("psaSelect").value;
   const numericPSA = mapPsaRangeToNumeric(psaRange);
-
   const tStage = document.getElementById("stageSelect").value;
 
-  // We'll get the highest Gleason sum from that single chosen report:
+  // get the highest Gleason sum from that single chosen report
   const chosenReport = allReports[chosenIndex];
   const gleasonSum = chosenReport.maxGleasonSum;
   const ggg = gleasonSumToGGG(gleasonSum);
 
-  // We'll compute positive cores from any sample with "AdenoCA" 
-  // (everything else is negative for nomogram).
+  // compute positive cores from that chosen report
   const { posCores, totalCores } = computePositiveCores(chosenReport);
   const negCores = totalCores - posCores;
 
-  // We can do a quick age guess from the patientDob if we want
+  // guess an age from patientDob
   let ageForNomogram = 65;
   if (patientDob) {
     const possibleAge = calcAgeFromDob(patientDob);
@@ -177,7 +178,7 @@ document.getElementById("calcNomogramBtn").addEventListener("click", () => {
     }
   }
 
-  // Simplify T stage for the nomogram (T1, T2a, T2b, T2c, T3).
+  // Simplify T stage for the nomogram
   let stageForNomogram = "T1";
   if (/^T2a/i.test(tStage)) stageForNomogram = "T2a";
   else if (/^T2b/i.test(tStage)) stageForNomogram = "T2b";
@@ -206,7 +207,6 @@ document.getElementById("calcNomogramBtn").addEventListener("click", () => {
  * chunkReports
  *********************************************************************/
 function chunkReports(raw) {
-  // Splits on lines that *start* with "Provider:"
   return raw.split(/(?=^Provider:\s)/im)
             .map(s => s.trim())
             .filter(Boolean);
@@ -224,11 +224,9 @@ function parseCollectedDate(text) {
  * parseDob
  *********************************************************************/
 function parseDob(text) {
-  // e.g. "DOB: 1/1/1955"
   let m = text.match(/DOB:\s*([0-9\/-]+)/i);
   if (m) return m[1].trim();
 
-  // e.g. "DOB/Age: 1/1/1955"
   m = text.match(/DOB\/Age:\s*([0-9\/-]+)/i);
   if (m) return m[1].trim();
 
@@ -296,7 +294,6 @@ function parseSamplesFromDx(dxLines) {
   dxLines.forEach(line => {
     const match = line.match(sampleHeaderRegex);
     if (match) {
-      // start a new sample
       if (current) {
         samples.push(finalizeSample(current));
       }
@@ -363,8 +360,7 @@ function parseLocation(text, label) {
 
 /**
  * parseShortDiagnosis:
- *   Priority: Adenocarcinoma → Prostatitis → Inflammation → Benign → else "N/A"
- *   (ASAP, HGPIN, BPH, etc. also considered "negative" for the nomogram.)
+ *   Priority: Adenocarcinoma → Prostatitis → Inflammation → Benign → ASAP → HGPIN → BPH → else "N/A"
  */
 function parseShortDiagnosis(txt) {
   const lower = txt.toLowerCase();
@@ -372,9 +368,9 @@ function parseShortDiagnosis(txt) {
   if (lower.includes("prostatitis"))   return "Prostatitis";
   if (lower.includes("inflammation"))  return "Inflammation";
   if (lower.includes("benign"))        return "Benign";
-  if (lower.includes("asap"))          return "ASAP";    // also negative
-  if (lower.includes("hgpin"))         return "HGPIN";   // also negative
-  if (lower.includes("bph"))           return "BPH";     // also negative
+  if (lower.includes("asap"))          return "ASAP";
+  if (lower.includes("hgpin"))         return "HGPIN";
+  if (lower.includes("bph"))           return "BPH";
   return "N/A";
 }
 
@@ -535,7 +531,7 @@ function buildComparisonTable(allReports) {
     radio.name = "nomogramSelect";
     radio.className = "nomogram-radio";
     radio.value = i.toString();
-    // No default checked, user must pick one if desired
+    // No default checked
 
     // We'll label it with the date and the risk
     const label = document.createElement("label");
@@ -602,86 +598,41 @@ function buildComparisonTable(allReports) {
   });
 }
 
-/**
+/*********************************************************************
  * computePositiveCores(report):
- *   1) We only consider AdenoCA samples as contributing positive cores.
- *   2) We parse "X/Y(...)" and then clamp X & Y based on location:
- *       - apex => max=3
- *       - mid => max=2
- *       - base => max=2
- *       - target => max=1  (or if "lesion" is in the location)
- *       - fallback => 2
- *   3) We sum up across all samples in that report.
- *   4) If sumTotal=0 => fallback to (0 pos, 14 total).
+ *   Example approach to sum AdenoCA "X/Y" cores. 
+ *   For demonstration, we do no special clamping.
+ *   If we find no AdenoCA, fallback (0,14).
  */
 function computePositiveCores(report) {
+  // Example: sum up all "X" if diagnosis="AdenoCA"
+  // fallback total=14 if none found
   let sumPos = 0;
-  let sumTotal = 0;
+  let anyFound = false;
 
   report.samples.forEach(s => {
-    // 1) Check if it's AdenoCA
-    if (!s.diagnosis.toLowerCase().includes("adeno")) {
-      // Not adenocarcinoma => 0
-      return;
+    if (s.diagnosis.toLowerCase().includes("adeno")) {
+      // parse "X/Y"
+      if (s.coresPositive && s.coresPositive !== "N/A") {
+        const match = s.coresPositive.match(/^(\d+)\/(\d+)/);
+        if (match) {
+          const x = parseInt(match[1], 10);
+          // add to sum
+          if (!isNaN(x)) {
+            sumPos += x;
+            anyFound = true;
+          }
+        }
+      }
     }
-
-    // 2) Attempt to parse "X/Y" from s.coresPositive
-    if (!s.coresPositive || s.coresPositive === "N/A") {
-      // no parseable "X/Y" => treat as 0/0 for this sample
-      return;
-    }
-    const match = s.coresPositive.match(/^(\d+)\/(\d+)/);
-    if (!match) {
-      // didn't find a pattern like "4/6"
-      return;
-    }
-
-    let x = parseInt(match[1], 10); // positive
-    let y = parseInt(match[2], 10); // total
-    if (isNaN(x) || isNaN(y) || y === 0) {
-      return; // skip
-    }
-
-    // 3) Determine maxCores for this sample based on location text
-    const locationLower = (s.location || "").toLowerCase();
-
-    let maxForThisSample = 2; // default if we can't identify apex/mid/base
-    if (locationLower.includes("apex")) {
-      maxForThisSample = 3;
-    } else if (locationLower.includes("mid")) {
-      maxForThisSample = 2;
-    } else if (locationLower.includes("base")) {
-      maxForThisSample = 2;
-    }
-    // if 'target' or 'lesion' => max=1
-    if (locationLower.includes("target") || locationLower.includes("lesion")) {
-      maxForThisSample = 1;
-    }
-
-    // 4) Clamp x & y to that maximum
-    if (y > maxForThisSample) {
-      y = maxForThisSample;
-    }
-    if (x > y) {
-      // If the parsed "4/6" becomes "y=3" => if x=4, clamp x=3
-      x = y;
-    }
-
-    // 5) Add to sum
-    sumPos   += x;
-    sumTotal += y;
   });
 
-  // If no AdenoCA or no parseable X/Y => sumTotal=0 => fallback
-  if (sumTotal === 0) {
+  if (!anyFound) {
     return { posCores: 0, totalCores: 14 };
+  } else {
+    // e.g., if 6 positives, total=14 => neg=8
+    // or you can force total=16, etc. Adjust as needed.
+    const forcedTotal = 14; 
+    return { posCores: sumPos, totalCores: forcedTotal };
   }
-
-  // If you want to always force total=14, do it here, e.g.:
-  // let leftoverNeg = 14 - sumPos;
-  // if (leftoverNeg < 0) leftoverNeg = 0;
-  // return { posCores: sumPos, totalCores: sumPos + leftoverNeg };
-
-  // Otherwise, return the actual sum of clamped values
-  return { posCores: sumPos, totalCores: sumTotal };
 }

@@ -79,7 +79,7 @@ button:hover {
 
 #nccnRiskResult {
   margin-left: 8px;
-  color: #d9534f; /* e.g. red color for emphasis */
+  color: #d9534f;
   font-weight: bold;
 }
 
@@ -108,4 +108,9 @@ button:hover {
   background-color: #f1f1f1;
   text-align: center;
   font-weight: bold;
+}
+
+.nomogram-radio {
+  margin-right: 6px;
+  vertical-align: middle;
 }

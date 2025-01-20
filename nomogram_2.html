@@ -17,12 +17,7 @@
 </head>
 <body>
 
-  <h1>Comprehensive Prostate Nomogram Demo</h1>
-  <p>
-    This is an <strong>unofficial</strong> example illustrating how to compute multiple 
-    endpoints from MSK’s published coefficients. <strong>Not for clinical use!</strong>
-  </p>
-
+  <h1>Pre-Radical Prostatectomy Nomogram</h1>
   <!-- PART A: Basic Input -->
   <div class="field">
     <label>Currently on Hormone Therapy?</label>
@@ -43,12 +38,12 @@
 
   <div class="field">
     <label for="ageInput">Patient Age (20–99):</label>
-    <input type="number" id="ageInput" value="65" min="20" max="99" step="1">
+    <input type="number" id="ageInput" min="20" max="99" step="1">
   </div>
 
   <div class="field">
     <label for="psaInput">Pre-Treatment PSA (0.1–100):</label>
-    <input type="number" id="psaInput" value="5.0" step="0.1" min="0.1" max="100">
+    <input type="number" id="psaInput" step="0.1" min="0.1" max="100">
   </div>
 
   <!-- Gleason Grade Group (1..5) -->
@@ -77,12 +72,12 @@
 
   <div class="field">
     <label for="posCoresInput">Number of Positive Cores:</label>
-    <input type="number" id="posCoresInput" value="3" min="0" max="30" step="1">
+    <input type="number" id="posCoresInput" min="0" max="30" step="1">
   </div>
 
   <div class="field">
     <label for="negCoresInput">Number of Negative Cores:</label>
-    <input type="number" id="negCoresInput" value="9" min="0" max="30" step="1">
+    <input type="number" id="negCoresInput" min="0" max="30" step="1">
   </div>
 
   <button id="calculateBtn">Calculate All</button>
@@ -92,7 +87,6 @@
 
   <div class="disclaimer">
     <strong>Disclaimer:</strong> Unofficial educational demo. 
-    Not validated, not medical advice. 
     Refer to <a href="https://www.mskcc.org/nomograms/prostate/pre_op/coefficients" target="_blank">MSK’s official website</a>.
   </div>
 
