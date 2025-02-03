@@ -245,8 +245,8 @@ function runCalculation() {
   const resultsDiv = document.getElementById('results');
   resultsDiv.innerHTML = `
     <p><strong>PC-Specific Survival @ 15 years:</strong> ${(pcDeathFree15*100).toFixed(1)}%</p>
-     <p><strong>Progression-Free @ 10 years:</strong> ${(probBCR10*100).toFixed(1)}%</p>
-     <p><strong>Progression-Free @ 5 years:</strong> ${(probBCR5*100).toFixed(1)}%</p>
+     <p><strong>Progression-Free Survival @ 10 years:</strong> ${(probBCR10*100).toFixed(1)}%</p>
+     <p><strong>Progression-Free Survival @ 5 years:</strong> ${(probBCR5*100).toFixed(1)}%</p>
     <p><strong>Organ Confined Disease Prob:</strong> ${(probOCD*100).toFixed(1)}%</p>
     <p><strong>Extracapsular Extension Prob:</strong> ${(probECE*100).toFixed(1)}%</p>
     <p><strong>Lymph Node Involvement Prob:</strong> ${(probLN*100).toFixed(1)}%</p>
