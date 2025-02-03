@@ -1,7 +1,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  width: 100%;
+  width: 80%;
 }
 
 body {
@@ -113,4 +113,61 @@ button:hover {
 .nomogram-radio {
   margin-right: 6px;
   vertical-align: middle;
+}
+
+
+.field { margin-bottom: 12px; }
+label { display: inline-block; width: 250px; font-weight: bold; }
+input, select { width: 200px; }
+#calculateBtn { margin-top: 20px; padding: 8px 16px; cursor: pointer; }
+.results { margin-top: 20px; }
+.results p { margin: 8px 0; }
+.warning { color: red; margin: 12px 0; }
+.disclaimer { margin-top: 30px; font-size: 0.9em; color: #444; }
+
+ /* Tooltip container */
+ .tooltip-container {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+/* The hidden tooltip bubble */
+.tooltip-bubble {
+  visibility: hidden;
+  background-color: #333;
+  color: #fff;
+  text-align: left;
+  padding: 6px;
+  border-radius: 4px;
+  position: absolute;
+  z-index: 999;
+  width: 220px;
+  top: 100%;  /* show below the container */
+  left: 0;
+  margin-top: 6px;
+}
+/* Show it on hover */
+.tooltip-container:hover .tooltip-bubble {
+  visibility: visible;
+}
+
+/* The bar for each core */
+.core-bar {
+  width: 100px;       /* total bar width */
+  height: 10px;
+  background: #eee;   /* default background */
+  border: 1px solid #ccc;
+  position: relative;
+  margin-bottom: 4px;
+}
+.tumor-segment {
+  position: absolute;
+  height: 100%;
+  background-color: red; /* tumor portion color */
+  left: 0;
+  top: 0;
+}
+.core-desc {
+  font-size: 12px; 
+  margin-bottom: 2px;
 }

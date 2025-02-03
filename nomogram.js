@@ -216,7 +216,7 @@ function runCalculation() {
   const ageVal = parseFloat(document.getElementById('ageInput').value) || 65;
   const psaVal = parseFloat(document.getElementById('psaInput').value) || 5;
   const gggVal = parseInt(document.getElementById('gggSelect').value, 10);
-  const stageVal = document.getElementById('stageSelect').value;
+  const stageVal = document.getElementById('stageSelect_nomogram').value;
   const posCoresVal = parseInt(document.getElementById('posCoresInput').value, 10) || 0;
   const negCoresVal = parseInt(document.getElementById('negCoresInput').value, 10) || 0;
 
@@ -255,23 +255,17 @@ function runCalculation() {
   `;
 }
 
-/********************************************************************
- * EXPORTED FUNCTION: setNomogramData(obj)
- ********************************************************************/
-window.setNomogramData = function(obj) {
-  // populate fields:
 
-  
+function setNomogramData(obj) {
+  // Populate fields directly in the main document:
   document.getElementById('ageInput').value = obj.age || 65;
   document.getElementById('psaInput').value = obj.psa || 5;
   document.getElementById('gggSelect').value = obj.ggg || 1;
-  document.getElementById('stageSelect').value = obj.stage || 'T1';
+  document.getElementById('stageSelect_nomogram').value = obj.stage || 'T1';
   document.getElementById('posCoresInput').value = obj.posCores || 0;
   document.getElementById('negCoresInput').value = obj.negCores || 0;
-
   document.getElementById('hormoneTherapy').value = obj.hormoneTherapy || 'No';
 
-
-  // run automatically
+  // Then run your calculation:
   runCalculation();
-};
+}

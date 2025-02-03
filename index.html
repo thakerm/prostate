@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Prostate Biopsy Long Report + NCCN Risk</title>
+  <title>Prostate Biopsy & NCCN Risk (Select Biopsy, Force 16 Cores)</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- (Optional) Could add a script for Chart.js here if you want future graphing -->
 </head>
 <body>
   <div class="container">
-    <h1>Prostate Biopsy & NCCN Risk (Ignore Extra Sections)</h1>
+    <h1>Prostate Biopsy & NCCN Risk Demo</h1>
 
-    <!-- Section: PSA range & T stage for risk calculation -->
+    <!-- Section: PSA range & T stage -->
     <div class="nccn-inputs">
       <label for="psaSelect">PSA Range:</label>
       <select id="psaSelect">
@@ -31,36 +30,160 @@
       </select>
     </div>
 
-    <!-- Textarea to paste one or more entire pathology reports -->
+    <!-- Textarea for multiple reports -->
     <div class="report-input-section">
       <label for="reportText">Paste One or More Reports:</label>
-      <textarea id="reportText" placeholder="Paste long biopsy reports here..."></textarea>
+      <textarea id="reportText" placeholder="Paste biopsy report(s) here...">Provider:  Dr Throckmorton
+        Collected: 12/6/2023                    Case #:  SRTS123456789
+          
+                             Surgical Pathology Report 
+          
+        DOB: 1/1/1955
+          
+        FINAL PATHOLOGIC DIAGNOSIS 
+        A.  PROSTATE NEEDLE BX - A RT APEX: 
+             --     FOCAL ATYPICAL SMALL ACINAR PROLIFERATION   
+             --     CHRONIC AND ACUTE PROSTATITIS 
+          
+        B.  PROSTATE NEEDLE BX - B RT MID:   
+             --     BENIGN PROSTATIC TISSUE WITH CHRONIC AND ACUTE 
+        PROSTATITIS 
+          
+        C.  PROSTATE NEEDLE BX - C RT BASE:   
+             --     BENIGN PROSTATIC TISSUE 
+          
+        D.  PROSTATE NEEDLE BX - D LT APEX:   
+                  --     PROSTATIC ADENOCARCINOMA, GLEASON SCORE 3 + 4 = 7 
+        (PATTERN 4 = 10%, GRADE GROUP 2), INVOLVING 4 OF 6 CORES (TUMOR 
+        MEASURES 5MM IN 5 MM CORE; TUMOR MEASURES 2MM IN 2 MM CORE; TUMOR 
+        MEASURES 1MM IN 8 MM CORE; TUMOR MEASURES 3MM IN 5 MM CORE) 
+        Perineural invasion present
+          
+        E.  PROSTATE NEEDLE BX - E LT MID: 
+             --     BENIGN PROSTATIC TISSUE WITH CHRONIC PROSTATITIS 
+          
+        F.  PROSTATE NEEDLE BX - F LT BASE: 
+                  --     PROSTATIC ADENOCARCINOMA, GLEASON SCORE 3 + 4 = 7 
+        (PATTERN 4 = 10%, GRADE GROUP 2), INVOLVING 2 OF 3 CORES (TUMOR 
+        MEASURES 2MM IN 7 MM CORE; TUMOR MEASURES 2MM IN 14 MM CORE) 
+          
+          
+                                 Karls Forege M.D. 
+                                 ** Report Electronically Signed by KF ** 
+        </textarea>
       <button id="processBtn">Process Reports</button>
+      <button id="clearBtn">Clear</button>
     </div>
 
-    <hr/>
 
-    <!-- Show the NCCN risk of the most recent report -->
+    <!-- Summaries -->
     <div class="nccn-output">
-      <strong>Current NCCN Risk Group (Most Recent Report):</strong>
+      <strong>Patient DOB:</strong> 
+      <span id="dobSpan">N/A</span>
+      &nbsp;&nbsp;&nbsp; 
+      <strong>Highest NCCN Risk (Across All Reports):</strong>
       <span id="nccnRiskResult">N/A</span>
+      &nbsp;&nbsp; 
+      <span id="riskDetails">(PSA=?, Gleason=?, Stage=?)</span>
     </div>
 
-    <hr />
+  
 
     <h2>Comparison Table</h2>
+    <p style="font-size: 13px; font-style: italic;">
+      Select which biopsy date to use for the nomogram by clicking the radio button 
+      in the header row. Then click <strong>“Calculate Nomogram”</strong> below.
+    </p>
     <div id="comparisonTableWrapper">
       <table id="comparisonTable">
-        <thead>
-          <!-- 1st row => Sample & Location, then 1 col per report date -->
-        </thead>
-        <tbody>
-          <!-- 1 row per sample label, each row has multiple columns for each report -->
-        </tbody>
+        <thead></thead>
+        <tbody></tbody>
       </table>
     </div>
+
+    <div style="margin-top: 10px;">
+      <button id="calcNomogramBtn">Calculate Nomogram</button>
+    </div>
+
+
+    <div>
+
+      <h1>Pre-Radical Prostatectomy Nomogram</h1>
+  <!-- PART A: Basic Input -->
+  <div class="field">
+    <label>Currently on Hormone Therapy?</label>
+    <select id="hormoneTherapy">
+      <option value="No" selected>No</option>
+      <option value="Yes">Yes (Model not valid)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Currently on Radiation Therapy?</label>
+    <select id="radiationTherapy">
+      <option value="No" selected>No</option>
+      <option value="Yes">Yes (Model not valid)</option>
+    </select>
   </div>
 
+
+  <div class="field">
+    <label for="ageInput">Patient Age (20–99):</label>
+    <input type="number" id="ageInput" min="20" max="99" step="1">
+  </div>
+
+  <div class="field">
+    <label for="psaInput">Pre-Treatment PSA (0.1–100):</label>
+    <input type="number" id="psaInput" step="0.1" min="0.1" max="100">
+  </div>
+
+  <!-- Gleason Grade Group (1..5) -->
+  <div class="field">
+    <label for="gggSelect">Biopsy Gleason Grade Group:</label>
+    <select id="gggSelect">
+      <option value="1">Group 1 (Gleason 6)</option>
+      <option value="2">Group 2 (3+4=7)</option>
+      <option value="3">Group 3 (4+3=7)</option>
+      <option value="4">Group 4 (Gleason 8)</option>
+      <option value="5">Group 5 (Gleason 9-10)</option>
+    </select>
+  </div>
+
+  <!-- Clinical Stage -->
+  <div class="field">
+    <label for="stageSelect_nomogram">Clinical Stage (AJCC v7):</label>
+    <select id="stageSelect_nomogram">
+      <option value="T1" selected>T1 (ref)</option>
+      <option value="T2a">T2a</option>
+      <option value="T2b">T2b</option>
+      <option value="T2c">T2c</option>
+      <option value="T3">T3 or T3+</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="posCoresInput">Number of Positive Cores:</label>
+    <input type="number" id="posCoresInput" min="0" max="30" step="1">
+  </div>
+
+  <div class="field">
+    <label for="negCoresInput">Number of Negative Cores:</label>
+    <input type="number" id="negCoresInput" min="0" max="30" step="1">
+  </div>
+
+  <button id="calculateBtn">Recalculate Nomogram</button>
+  <div id="warnings" class="warning"></div>
+
+  <div class="results" id="results"></div>
+
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> Unofficial educational demo. 
+    Refer to <a href="https://www.mskcc.org/nomograms/prostate/pre_op/coefficients" target="_blank">MSK’s official website</a>.
+  </div>
+    </div>
+
+
+  </div>
   <script src="app.js"></script>
+  <script src="nomogram.js"></script>
 </body>
 </html>

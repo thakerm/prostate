@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prostate Biopsy Path Report Processor</title>
+  <link rel="stylesheet" href="style_deep.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Prostate Biopsy Path Report Processor</h1>
+    
+    <!-- Input Section -->
+    <div class="input-section">
+      <h2>Enter Pathology Reports</h2>
+      <textarea id="report-input" placeholder="Paste pathology report(s) here..."></textarea>
+      <button id="process-btn">Process Reports</button>
+    </div>
+
+    <!-- Summary Table -->
+    <div class="summary-section">
+      <h2>Summary Table</h2>
+      <table id="summary-table">
+        <thead>
+          <tr>
+            <th>Sample</th>
+            <th>Location</th>
+            <th>Path Summary</th>
+            <th>Cores Positive</th>
+            <th>Max Length Core (mm)</th>
+            <th>NCCN Risk Group</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Rows will be populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Nomogram Section -->
+    <div class="nomogram-section">
+      <h2>MSK Pre-Radical Prostatectomy Nomogram</h2>
+      <label for="psa-input">PSA (ng/mL):</label>
+      <input type="number" id="psa-input" step="0.1">
+      <label for="clinical-stage">Clinical Stage:</label>
+      <select id="clinical-stage">
+        <option value="T1c">T1c</option>
+        <option value="T2a">T2a</option>
+        <option value="T2b">T2b</option>
+        <option value="T2c">T2c</option>
+      </select>
+      <button id="run-nomogram-btn">Run Nomogram</button>
+      <div id="nomogram-result"></div>
+    </div>
+  </div>
+
+  <script src="app_deep.js"></script>
+</body>
+</html>
