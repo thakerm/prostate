@@ -27,14 +27,41 @@ function getHighestNccnRisk(reportArray) {
   return highestStr;
 }
 
-function mapPsaRangeToNumeric(rangeStr) {
-  switch (rangeStr) {
-    case "<10":   return 5;
-    case "10-20": return 15;
-    case ">20":   return 25;
+function mapPsaRangeToNumeric(psaVal) {
+  if (psaVal === "PSA") {
+    // the user wants a manual PSA
+    const manual = parseFloat(document.getElementById("psaManualInput").value);
+    if (!isNaN(manual) && manual > 0) {
+      return manual;
+    }
+    // fallback if user hasn't typed anything
+    return 10; // or whatever default
+  } else if (psaVal === "<10") {
+    return 5;  // example numeric approximation
+  } else if (psaVal === "10-20") {
+    return 15;
+  } else if (psaVal === ">20") {
+    return 25;
   }
+  // fallback
   return 5;
 }
+
+//Custom PSA event listener 
+document.getElementById("psaSelect").addEventListener("change", function() {
+  const val = this.value;  // e.g. "<10", "10-20", ">20", or "PSA"
+  const psaInput = document.getElementById("psaManualInput");
+  
+  if (val === "PSA") {
+    // show the input
+    psaInput.style.display = "inline-block";
+  } else {
+    // hide it
+    psaInput.style.display = "none";
+    // optionally clear it
+    psaInput.value = "";
+  }
+});
 
 /*********************************************************************
  * GRADE GROUP
@@ -77,7 +104,7 @@ document.getElementById("processBtn").addEventListener("click", () => {
     return;
   }
 
-  const psaRange = document.getElementById("psaSelect").value; 
+  const psaRange = mapPsaRangeToNumeric(document.getElementById("psaSelect").value)
   const tStage = document.getElementById("stageSelect").value;
 
   chunks.forEach(chunk => {
