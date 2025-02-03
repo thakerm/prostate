@@ -486,7 +486,7 @@ function formatCores(x, y) {
 }
 
 function extractMaxCoreSize(text) {
-  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+(\d+)\s*mm\s*core/gi;
+  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+a?n?\s*(\d+)\s*mm\s*core/gi;
   let match;
   let maxSize = null;
   while ((match = pattern.exec(text.toLowerCase())) !== null) {
@@ -798,7 +798,7 @@ function showCoresPopup(evt, coreArray) {
     tumorDiv.style.bottom = 0;
     tumorDiv.style.width = "100%";
     tumorDiv.style.height = tumorH+"px";
-    tumorDiv.style.backgroundColor = "red";
+    tumorDiv.style.backgroundColor = "blue";
 
     barOuter.appendChild(tumorDiv);
     popup.appendChild(barOuter);

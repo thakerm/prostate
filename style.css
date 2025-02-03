@@ -140,7 +140,7 @@ button:hover {
 }
 
 .warning {
-  color: red;
+  color: rgb(0, 72, 92);
   margin: 12px 0;
 }
 .results {
@@ -183,7 +183,7 @@ button:hover {
   position: absolute;
   bottom: 0;
   width: 100%;
-  background: red;
+  background: rgb(68, 255, 0);
 }
 
 /* For the popup that appears on hover with "View Cores" */
