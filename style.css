@@ -121,6 +121,9 @@ button:hover {
   margin-right: 6px;
   vertical-align: middle;
 }
+.cancer {
+  font-weight: bold;
+}
 
 /* Field blocks in the Nomogram section */
 .field {

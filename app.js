@@ -683,11 +683,14 @@ function buildComparisonTable(allReports) {
 
     allReports.forEach(r => {
       const sampleObj = r.samples.find(s => s.sampleLabel === label);
+      
       const cell = document.createElement("td");
-
       if (!sampleObj) {
+        
         cell.textContent = "N/A";
-      } else {
+      } else 
+      {
+  
         let combined = "";
         if (sampleObj.isTarget && sampleObj.leftoverSite) {
           combined += sampleObj.leftoverSite + " - ";
@@ -698,10 +701,13 @@ function buildComparisonTable(allReports) {
           if (sampleObj.patternDist) {
             combined += `(${sampleObj.patternDist})`;
           }
+             
+          
           
         }
         if (sampleObj.gradeGroup) {
           combined += (combined ? ", GG=" : "GG=") + sampleObj.gradeGroup;
+          cell.classList.add("cancer");
         }
         if (sampleObj.coresPositive && sampleObj.coresPositive !== "N/A") {
           combined += (combined ? ", Cores=" : "Cores=") + sampleObj.coresPositive;
