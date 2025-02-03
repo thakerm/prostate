@@ -1,52 +1,52 @@
+/* Reset some default margins */
+* {
+  box-sizing: border-box;
+}
+
+/* Body & Container */
 html, body {
   margin: 0;
   padding: 0;
-  width: 80%;
-}
-
-body {
-  font-family: Arial, sans-serif;
   background-color: #f7f7f7;
+  font-family: Arial, sans-serif;
   color: #333;
   font-size: 14px;
 }
-
 .container {
-  width: 90%;
-  margin: 20px auto;
+  max-width: 1024px;
+  margin: 30px auto;
   background: #fff;
-  padding: 20px;
+  padding: 20px 25px;
   border-radius: 6px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* Headings */
 h1, h2 {
-  margin-bottom: 14px;
   text-align: center;
-}
-
-.nccn-inputs {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.nccn-inputs label {
-  font-weight: bold;
-}
-
-.report-input-section {
   margin-bottom: 15px;
 }
 
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 14px;
+/* PSA range, T stage inputs */
+.nccn-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.nccn-inputs label {
   font-weight: bold;
+  margin-bottom: 0; /* since flex item */
 }
 
+/* Report input section */
+.report-input-section {
+  margin-bottom: 15px;
+}
+.report-input-section label {
+  margin: 0 0 5px 0;
+}
 #reportText {
   width: 100%;
   height: 120px;
@@ -57,7 +57,10 @@ label {
   font-size: 13px;
   resize: vertical;
 }
-
+.button-row {
+  display: flex;
+  gap: 10px;
+}
 button {
   background-color: #007bff;
   color: #fff;
@@ -67,34 +70,40 @@ button {
   cursor: pointer;
   font-size: 13px;
 }
-
 button:hover {
   background-color: #0056b3;
 }
 
+/* Summaries */
 .nccn-output {
   margin: 10px 0;
   font-size: 15px;
 }
-
 #nccnRiskResult {
   margin-left: 8px;
   color: #d9534f;
   font-weight: bold;
 }
 
+/* Table instructions above comparison table */
+.table-instructions {
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+  margin: 0 auto 10px auto;
+  max-width: 600px;
+  line-height: 1.4;
+}
+
+/* Comparison Table */
 #comparisonTableWrapper {
   overflow-x: auto;
   margin-top: 20px;
 }
-
 #comparisonTable {
   border-collapse: collapse;
-  table-layout: auto;
-  width: auto;
   margin: 0 auto;
 }
-
 #comparisonTable th,
 #comparisonTable td {
   border: 1px solid #ccc;
@@ -103,71 +112,85 @@ button:hover {
   font-size: 13px;
   white-space: nowrap;
 }
-
 #comparisonTable thead th {
   background-color: #f1f1f1;
   text-align: center;
   font-weight: bold;
 }
-
 .nomogram-radio {
   margin-right: 6px;
   vertical-align: middle;
 }
 
-
-.field { margin-bottom: 12px; }
-label { display: inline-block; width: 250px; font-weight: bold; }
-input, select { width: 200px; }
-#calculateBtn { margin-top: 20px; padding: 8px 16px; cursor: pointer; }
-.results { margin-top: 20px; }
-.results p { margin: 8px 0; }
-.warning { color: red; margin: 12px 0; }
-.disclaimer { margin-top: 30px; font-size: 0.9em; color: #444; }
-
- /* Tooltip container */
- .tooltip-container {
-  position: relative;
+/* Field blocks in the Nomogram section */
+.field {
+  margin-bottom: 12px;
+}
+.field label {
   display: inline-block;
-  cursor: pointer;
+  width: 250px;
+  font-weight: bold;
 }
-/* The hidden tooltip bubble */
-.tooltip-bubble {
-  visibility: hidden;
-  background-color: #333;
-  color: #fff;
-  text-align: left;
-  padding: 6px;
-  border-radius: 4px;
-  position: absolute;
-  z-index: 999;
-  width: 220px;
-  top: 100%;  /* show below the container */
-  left: 0;
-  margin-top: 6px;
-}
-/* Show it on hover */
-.tooltip-container:hover .tooltip-bubble {
-  visibility: visible;
+.field input, 
+.field select {
+  width: 200px;
 }
 
-/* The bar for each core */
-.core-bar {
-  width: 100px;       /* total bar width */
-  height: 10px;
-  background: #eee;   /* default background */
-  border: 1px solid #ccc;
-  position: relative;
-  margin-bottom: 4px;
+.warning {
+  color: red;
+  margin: 12px 0;
 }
-.tumor-segment {
-  position: absolute;
-  height: 100%;
-  background-color: red; /* tumor portion color */
-  left: 0;
+.results {
+  margin-top: 20px;
+}
+.disclaimer {
+  margin-top: 30px;
+  font-size: 0.9em;
+  color: #444;
+}
+
+/* minimal styling for the modal overlay */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  left: 0; 
   top: 0;
+  width: 100%; 
+  height: 100%;
+  background-color: rgba(0,0,0,0.2); /* slight overlay */
 }
-.core-desc {
-  font-size: 12px; 
-  margin-bottom: 2px;
+.modal-content {
+  background-color: #f9f9f9;
+  margin: 50px auto;
+  width: 300px;
+  border: 1px solid #aaa;
+  position: relative;
+  padding: 10px 15px;
+}
+
+/* The vertical bar container & tumor portion (for your bar charts) */
+.core-bar-outer {
+  background: #fff;
+  border: 1px solid #333;
+  position: relative;
+  width: 40px;
+}
+.core-bar-tumor {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: red;
+}
+
+/* For the popup that appears on hover with "View Cores" */
+#coresPopup {
+  display: none;
+  position: absolute;
+  z-index: 9999;
+  background: #f9f9f9;
+  border: 1px solid #999;
+  padding: 6px;
+  width: 150px;
+  font-size: 13px;
 }

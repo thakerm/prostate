@@ -32,45 +32,7 @@
 
     <!-- Textarea for multiple reports -->
     <div class="report-input-section">
-      <label for="reportText">Paste One or More Reports:</label>
-      <textarea id="reportText" placeholder="Paste biopsy report(s) here...">Provider:  Dr Throckmorton
-        Collected: 12/6/2023                    Case #:  SRTS123456789
-          
-                             Surgical Pathology Report 
-          
-        DOB: 1/1/1955
-          
-        FINAL PATHOLOGIC DIAGNOSIS 
-        A.  PROSTATE NEEDLE BX - A RT APEX: 
-             --     FOCAL ATYPICAL SMALL ACINAR PROLIFERATION   
-             --     CHRONIC AND ACUTE PROSTATITIS 
-          
-        B.  PROSTATE NEEDLE BX - B RT MID:   
-             --     BENIGN PROSTATIC TISSUE WITH CHRONIC AND ACUTE 
-        PROSTATITIS 
-          
-        C.  PROSTATE NEEDLE BX - C RT BASE:   
-             --     BENIGN PROSTATIC TISSUE 
-          
-        D.  PROSTATE NEEDLE BX - D LT APEX:   
-                  --     PROSTATIC ADENOCARCINOMA, GLEASON SCORE 3 + 4 = 7 
-        (PATTERN 4 = 10%, GRADE GROUP 2), INVOLVING 4 OF 6 CORES (TUMOR 
-        MEASURES 5MM IN 5 MM CORE; TUMOR MEASURES 2MM IN 2 MM CORE; TUMOR 
-        MEASURES 1MM IN 8 MM CORE; TUMOR MEASURES 3MM IN 5 MM CORE) 
-        Perineural invasion present
-          
-        E.  PROSTATE NEEDLE BX - E LT MID: 
-             --     BENIGN PROSTATIC TISSUE WITH CHRONIC PROSTATITIS 
-          
-        F.  PROSTATE NEEDLE BX - F LT BASE: 
-                  --     PROSTATIC ADENOCARCINOMA, GLEASON SCORE 3 + 4 = 7 
-        (PATTERN 4 = 10%, GRADE GROUP 2), INVOLVING 2 OF 3 CORES (TUMOR 
-        MEASURES 2MM IN 7 MM CORE; TUMOR MEASURES 2MM IN 14 MM CORE) 
-          
-          
-                                 Karls Forege M.D. 
-                                 ** Report Electronically Signed by KF ** 
-        </textarea>
+      <textarea id="reportText" placeholder="Paste biopsy report(s) here..."></textarea>
       <button id="processBtn">Process Reports</button>
       <button id="clearBtn">Clear</button>
     </div>
@@ -100,13 +62,17 @@
         <tbody></tbody>
       </table>
     </div>
+    <!-- ... your existing HTML (table, buttons, etc.) ... -->
+
+<!-- The absolute-positioned popup for showing cores on hover -->
+<div id="coresPopup"></div>
 
     <div style="margin-top: 10px;">
       <button id="calcNomogramBtn">Calculate Nomogram</button>
     </div>
 
 
-    <div>
+    <div id="nomogramDiv" style="display:none">
 
       <h1>Pre-Radical Prostatectomy Nomogram</h1>
   <!-- PART A: Basic Input -->
@@ -185,5 +151,12 @@
   </div>
   <script src="app.js"></script>
   <script src="nomogram.js"></script>
+
+  <!-- ... your existing HTML ... -->
+<!-- Add a modal container somewhere near the bottom of the body -->
+<div id="barsModal" class="modal">
+  <div id="barsModalContent" class="modal-content"></div>
+</div>
+</div>
 </body>
 </html>
