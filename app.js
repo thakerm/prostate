@@ -243,8 +243,10 @@ function calcAgeFromDob(dobStr) {
   }
   return age;
 }
-function extractFinalDxLines(reportText) {
+/* function extractFinalDxLines(reportText) {
   const lines = reportText.split(/\r?\n/).map(l => l.trim());
+
+ 
   let inFinal = false;
   let dxLines = [];
   for (let line of lines) {
@@ -252,6 +254,9 @@ function extractFinalDxLines(reportText) {
       inFinal = true;
       continue;
     }
+
+ 
+
     if (!inFinal) continue;
     if (/^Comment\s*$/i.test(line)) break;
     if (/^Gross\s+Description\s*$/i.test(line)) break;
@@ -261,11 +266,71 @@ function extractFinalDxLines(reportText) {
     if (/disclaimer|immunohistochemistry|\*\*\s*Report\s*Electronically\s*Signed\s*by|electronically\s*signed\s*by/i.test(line)) {
       continue;
     }
+
     if (!line) continue;
     dxLines.push(line);
   }
   return dxLines;
-}
+} */
+
+  function extractFinalDxLines(reportText) {
+    // 1) Split lines and trim
+    const rawLines = reportText.split(/\r?\n/).map(l => l.trim());
+    
+    // 2) First pass: merge lines ending in "See" with next line if it starts with "Comment"
+    //    e.g. "TUMOR... SEE" + "COMMENT." => "TUMOR... SEE COMMENT."
+    const mergedLines = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      let line = rawLines[i];
+      if (!line) continue;
+  
+      // if the line ends with "See" (ignoring case),
+      // check next line for "Comment"
+      if (/\bsee\s*$/i.test(line)) {
+        const nextLine = rawLines[i+1] ? rawLines[i+1].trim() : "";
+        if (/^comment\b/i.test(nextLine)) {
+          // unify them => "See Comment"
+          line = line + " " + nextLine;
+          i++; // skip next line
+        }
+      }
+  
+      mergedLines.push(line);
+    }
+  
+    // 3) Second pass: parse final dx lines
+    let inFinal = false;
+    let dxLines = [];
+  
+    for (let line of mergedLines) {
+      // If we see "FINAL PATHOLOGIC DIAGNOSIS", start capturing
+      if (/^FINAL\s+PATHOLOGIC\s+DIAGNOSIS/i.test(line)) {
+        inFinal = true;
+        continue;
+      }
+      if (!inFinal) continue;
+  
+      // If the line is EXACTLY "Comment" => break
+      if (/^comment\s*$/i.test(line)) break;
+  
+      // Also break on these headings
+      if (/^Gross\s+Description\s*$/i.test(line)) break;
+      if (/^Clinical\s+History\s*$/i.test(line)) break;
+      if (/^Specimen\(s\)\s*Received/i.test(line)) break;
+      if (/^FHIR\s+Pathology/i.test(line)) break;
+  
+      // skip disclaimers, signoffs
+      if (/disclaimer|immunohistochemistry|\*\*\s*Report\s*Electronically\s*Signed\s*by|electronically\s*signed\s*by/i.test(line)) {
+        continue;
+      }
+  
+      if (!line) continue;
+  
+      dxLines.push(line);
+    }
+  
+    return dxLines;
+  }
 
 /*********************************************************************
  * parseSamplesFromDx
@@ -273,7 +338,7 @@ function extractFinalDxLines(reportText) {
 function parseSamplesFromDx(dxLines) {
   const samples = [];
   let current = null;
-  const sampleHeaderRegex = /^([A-Z])[\.\)]\s*(.*)/;
+  const sampleHeaderRegex = /^[^\S\r\n]*([A-Z])[\.\):]\s*(.*)/;
   dxLines.forEach(line => {
     const match = line.match(sampleHeaderRegex);
     if (match) {
