@@ -4,7 +4,10 @@
 
 let allReports = [];
 let patientDob = null;
+let overridePSA = false;
+let overrideDRE = false;
 
+//NCCN risk order function
 const RISK_ORDER = {
   "Very Low": 1,
   "Low": 2,
@@ -27,16 +30,17 @@ function getHighestNccnRisk(reportArray) {
   return highestStr;
 }
 
+//mapping PSA ranges to numerics if chosen (this will likely be depreciated soon)
 function mapPsaRangeToNumeric(psaVal) {
-  if (psaVal === "PSA") {
+  console.log("PSA Val: ", psaVal)
+  if (psaVal ==="PSA" || psaVal==="Auto") {
     // the user wants a manual PSA
     const manual = parseFloat(document.getElementById("psaManualInput").value);
     if (!isNaN(manual) && manual > 0) {
       return manual;
     }
-    // fallback if user hasn't typed anything
-    return 10; // or whatever default
-  } else if (psaVal === "<10") {
+  } 
+  else if (psaVal === "<10") {
     return 5;  // example numeric approximation
   } else if (psaVal === "10-20") {
     return 15;
@@ -53,28 +57,89 @@ document.getElementById("psaSelect").addEventListener("change", function() {
   const psaInput = document.getElementById("psaManualInput");
   
   if (val === "PSA") {
-    // show the input
-    psaInput.style.display = "inline-block";
+    psaInput.disabled = false;
+    overridePSA = true;
+
+  }
+  else if(val==="Auto")
+  {
+    psaInput.disabled = true;
+    overridePSA = false;
+  }
+  else if (val === "<20" || val === "10-20" || val === ">20") {
+    overridePSA = true;
+    psaInput.disabled=true;
+  }
+  
+});
+
+// "Custom DRE/Stage event listener"
+document.getElementById("stageSelect").addEventListener("change", function() {
+  const val = this.value;  // e.g. "Auto", "T1c", "T2", etc.
+
+  if (val === "Auto") {
+    overrideDRE = false;
   } else {
-    // hide it
-    psaInput.style.display = "none";
-    // optionally clear it
-    psaInput.value = "";
+    overrideDRE = true;
   }
 });
 
 /*********************************************************************
- * GRADE GROUP
+ * GRADE GROUP Extraction, if no GG, will check for Gleason Score 
+ * updated 2/12/2025
  *********************************************************************/
 function extractGradeGroup(text) {
-  const re = /grade\s+group\s+(\d+)/i;
-  const m = text.match(re);
-  if (!m) return 0;
-  const gg = parseInt(m[1], 10);
-  if (gg >= 1 && gg <= 5) return gg;
+  // 1) Try to find "grade group X"
+  const reGradeGroup = /grade\s+group\s+(\d+)/i;
+  let m = text.match(reGradeGroup);
+  if (m) {
+    const gg = parseInt(m[1], 10);
+    if (gg >= 1 && gg <= 5) return gg;
+  }
+
+  // 2) If no direct "Grade Group," try to find a Gleason pattern
+  //    e.g. "Gleason 3 + 4 = 7" or "Gleason score 3+4=7"
+  const reGleason = /gleason\s*(?:score\s*)?(\d+)\s*\+\s*(\d+)\s*(?:=\s*(\d+))?/i;
+  m = text.match(reGleason);
+  if (m) {
+    // m[1] => primary
+    // m[2] => secondary
+    // m[3] => optional sum
+    const p = parseInt(m[1], 10);
+    const s = parseInt(m[2], 10);
+    if (!isNaN(p) && !isNaN(s)) {
+      let sum = p + s;
+      if (m[3]) {
+        const sumParsed = parseInt(m[3], 10);
+        if (!isNaN(sumParsed)) {
+          sum = sumParsed;
+          if (sum===6)
+          {
+            gg=1;
+          }
+          else if(p===3 && sum===7)
+          {
+            gg=2;
+          }
+          else if(p===4 && sum===7)
+          {
+            gg=3;
+          }
+          else if (sum===8)
+          {
+            gg=4;
+          }
+          else gg=5;
+        }
+      }
+      // Now map sum => Grade Group
+      return gg;
+    }
+  }
+
+  // 3) If neither was found, return 0
   return 0;
 }
-
 function gradeGroupToGleasonSum(gg) {
   switch (gg) {
     case 1: return 6;
@@ -86,17 +151,120 @@ function gradeGroupToGleasonSum(gg) {
   }
 }
 
+function parseExtraData(reportText) {
+  // 1) Split the text into lines
+  const lines = reportText.split(/\r?\n/).map(line => line.trim());
+  const psaInput = document.getElementById("psaManualInput");
+  let numTemplates = null;
+  let dre = null;
+
+
+  // We'll store all PSA occurrences here, each with { value: number, dateStr: 'MM/DD/YYYY', dateObj: Date }
+  const psaList = [];
+
+  // 2) Define our regex patterns:
+  const reTemplates = /Number\s+of\s+Template\s+Cores:\s*(\d+)/i;
+  const reDre = /^DRE:\s*(\S+)/i;
+  // For the PSA lines, we look for:
+  //   "PSA" [some spaces] <float> [some spaces] <MM/DD/YYYY>
+  // Example line: "PSA      2.0      01/07/2023"
+  const rePSA = /^PSA\s+(\d+(?:\.\d+)?)\s+(\d{1,2}\/\d{1,2}\/\d{4})/i;
+
+  // 3) Loop through each line and see if it matches
+  for (const line of lines) {
+    // A) Number of Template Cores
+    let m = line.match(reTemplates);
+    if (m) {
+      numTemplates = parseInt(m[1], 10);  // e.g., "12"
+      document.getElementById("numBx").value = numTemplates;
+      continue;
+    }
+    else{
+      document.getElementById("numBx").value = "14";
+    }
+
+    // B) DRE
+    m = line.match(reDre);
+    if (m) {
+      dre = m[1];  // e.g., "T1c"
+      if (overrideDRE === false)
+      {
+          document.getElementById("stageSelect").value = dre;
+      }
+      continue;
+    }
+    else{
+      document.getElementById("stageSelect").value  = "T1c";
+    }
+
+    // C) PSA lines
+    m = line.match(rePSA);
+    if (m) {
+      const psaVal = parseFloat(m[1]);   // e.g. "2.0"
+      const dateStr = m[2];             // e.g. "01/07/2023"
+      const dateObj = parseDateIfPossible(dateStr);
+      // Store them in an array
+      psaList.push({ value: psaVal, dateStr, dateObj });
+      continue;
+    }
+   
+  }
+
+  // 4) If we have multiple PSA readings, pick the **latest** by comparing dateObj
+  let latestPSA = null;
+  let latestPSADate = null;
+
+  if (psaList.length) {
+    // Filter out any invalid dateObj’s that came back null
+    const validPsas = psaList.filter(p => p.dateObj !== null);
+    // If none are valid, we can skip or pick the earliest by default
+    if (validPsas.length) {
+      validPsas.sort((a, b) => b.dateObj - a.dateObj);
+      const newest = validPsas[0];
+      latestPSA = newest.value;
+      latestPSADate = newest.dateStr;
+    } else {
+      // fallback if all date parses failed
+      // or you can keep track of the first line if needed
+      const first = psaList[0];
+      latestPSA = first.value;
+      latestPSADate = first.dateStr;
+    }
+  }
+ if(overridePSA===false && latestPSA)
+ {
+  document.getElementById("psaManualInput").value = latestPSA;
+ }
+ else
+ {
+  document.getElementById("psaSelect").value = "PSA";
+  psaInput.disabled = false;
+ }
+
+
+}
+
+// Helper to parse "MM/DD/YYYY" => a Date object
+// returns null if parse fails
+function parseDateIfPossible(dateStr) {
+  // For US-style "MM/DD/YYYY" strings, we can do:
+  const time = Date.parse(dateStr);
+  return isNaN(time) ? null : new Date(time);
+}
 /*********************************************************************
  * EVENT: "Process Reports"
  *********************************************************************/
 document.getElementById("processBtn").addEventListener("click", () => {
   const rawText = document.getElementById("reportText").value.trim();
+
   if (!rawText) {
     alert("Please paste at least one pathology report.");
     return;
   }
   allReports = [];
   patientDob = null;
+  patientDRE = null;
+  numberofcores = null;
 
   const chunks = chunkReports(rawText);
   if (!chunks.length) {
@@ -104,7 +272,15 @@ document.getElementById("processBtn").addEventListener("click", () => {
     return;
   }
 
-  const psaRange = mapPsaRangeToNumeric(document.getElementById("psaSelect").value)
+  document.getElementById("nccn-output").style.display="block";
+  document.getElementById("comparisonTableWrapper").style.display = "block";
+  document.getElementById("calcnomodiv").style.display = "block"
+
+  parseExtraData(rawText);
+
+  psaRange = mapPsaRangeToNumeric(document.getElementById("psaSelect").value)
+  //const psaRange = document.getElementById("psaSelect").value;
+  console.log("PSA Range: ", psaRange);
   const tStage = document.getElementById("stageSelect").value;
 
   chunks.forEach(chunk => {
@@ -153,11 +329,96 @@ document.getElementById("processBtn").addEventListener("click", () => {
     document.getElementById("riskDetails").textContent = "(PSA=?, Gleason=?, Stage=?)";
   }
 });
+function adjustCoresForGg1(report) {
+  let adjustedPos = 0;
+  let adjustedTotal = 0;
+  report.samples.forEach(sample => {
+    // Only include samples that are not GG1.
+    if (sample.gradeGroup > 1 && sample.coresPositive && sample.coresPositive !== "N/A") {
+      // Expecting coresPositive to be formatted like "1/1(100%)"
+      const match = sample.coresPositive.match(/^(\d+)\s*\/\s*(\d+)/);
+      if (match) {
+        adjustedPos += parseInt(match[1], 10);
+        adjustedTotal += parseInt(match[2], 10);
+      }
+    }
+  });
+  return { posCores: adjustedPos, totalCores: adjustedTotal };
+}
+function updateNomogram() {
+  // (Your existing calculate nomogram code here)
+  const nomogramDiv = document.getElementById("nomogramDiv");
+  nomogramDiv.style.display = "block";
+  
+  const radios = document.querySelectorAll(".nomogram-radio");
+  let chosenIndex = -1;
+  radios.forEach(r => {
+    if (r.checked) {
+      chosenIndex = parseInt(r.value, 10);
+    }
+  });
+  if (chosenIndex < 0 || !allReports[chosenIndex]) {
+    alert("Please select which biopsy date to use for the nomogram first.");
+    return;
+  }
+  
+  const psaRange = document.getElementById("psaSelect").value;
+  const numericPSA = mapPsaRangeToNumeric(psaRange);
+  const tStage = document.getElementById("stageSelect").value;
+  
+  const chosenReport = allReports[chosenIndex];
+  const gg = chosenReport.maxGradeGroup || 1;
+  
+  // Here you can conditionally update the core counts based on the checkbox
+  let posCores, totalCores;
+  if (document.getElementById("nogg1").checked) {
+    const adjusted = adjustCoresForGg1(chosenReport);
+    posCores = adjusted.posCores;
+    totalCores = adjusted.totalCores;
+  } else {
+    posCores = chosenReport.posCores;
+    totalCores = chosenReport.totalCores;
+  }
+  const negCores = totalCores - posCores;
+  
+  let ageForNomogram = 65;
+  if (patientDob) {
+    const possibleAge = calcAgeFromDob(patientDob);
+    if (possibleAge && possibleAge > 0) {
+      ageForNomogram = possibleAge;
+    }
+  }
+  
+  let stageForNomogram = "T1";
+  if (/^T2a/i.test(tStage)) stageForNomogram = "T2a";
+  else if (/^T2b/i.test(tStage)) stageForNomogram = "T2b";
+  else if (/^T2c/i.test(tStage)) stageForNomogram = "T2c";
+  else if (/^T3/i.test(tStage))  stageForNomogram = "T3";
+  
+  if (typeof setNomogramData === "function") {
+    setNomogramData({
+      age: ageForNomogram,
+      psa: numericPSA,
+      ggg: gg,
+      stage: stageForNomogram,
+      posCores,
+      negCores,
+      hormoneTherapy: "No",
+      radiationTherapy: "No"
+    });
+  } else {
+    alert("setNomogramData not found.");
+  }
+}
+
+// Attach event listeners for both the button and the checkbox
+document.getElementById("calcNomogramBtn").addEventListener("click", updateNomogram);
+document.getElementById("nogg1").addEventListener("change", updateNomogram);
 
 /*********************************************************************
  * EVENT: "Calculate Nomogram"
  *********************************************************************/
-document.getElementById("calcNomogramBtn").addEventListener("click", () => {
+/* document.getElementById("calcNomogramBtn").addEventListener("click", () => {
   const nomogramDiv = document.getElementById("nomogramDiv");
   nomogramDiv.style.display = "block";
   const radios = document.querySelectorAll(".nomogram-radio");
@@ -212,7 +473,7 @@ document.getElementById("calcNomogramBtn").addEventListener("click", () => {
   } else {
     alert("setNomogramData not found.");
   }
-});
+}); */
 
 /*********************************************************************
  * chunkReports, parseCollectedDate, parseDob, ...
@@ -243,35 +504,6 @@ function calcAgeFromDob(dobStr) {
   }
   return age;
 }
-/* function extractFinalDxLines(reportText) {
-  const lines = reportText.split(/\r?\n/).map(l => l.trim());
-
- 
-  let inFinal = false;
-  let dxLines = [];
-  for (let line of lines) {
-    if (/^FINAL\s+PATHOLOGIC\s+DIAGNOSIS/i.test(line)) {
-      inFinal = true;
-      continue;
-    }
-
- 
-
-    if (!inFinal) continue;
-    if (/^Comment\s*$/i.test(line)) break;
-    if (/^Gross\s+Description\s*$/i.test(line)) break;
-    if (/^Clinical\s+History\s*$/i.test(line)) break;
-    if (/^Specimen\(s\)\s*Received/i.test(line)) break;
-    if (/^FHIR\s+Pathology/i.test(line)) break;
-    if (/disclaimer|immunohistochemistry|\*\*\s*Report\s*Electronically\s*Signed\s*by|electronically\s*signed\s*by/i.test(line)) {
-      continue;
-    }
-
-    if (!line) continue;
-    dxLines.push(line);
-  }
-  return dxLines;
-} */
 
   function extractFinalDxLines(reportText) {
     // 1) Split lines and trim
@@ -333,12 +565,12 @@ function calcAgeFromDob(dobStr) {
   }
 
 /*********************************************************************
- * parseSamplesFromDx
+ * parseSamplesFromDx (updated 2/12/2025)
  *********************************************************************/
 function parseSamplesFromDx(dxLines) {
   const samples = [];
   let current = null;
-  const sampleHeaderRegex = /^[^\S\r\n]*([A-Z])[\.\):]\s*(.*)/;
+  const sampleHeaderRegex = /^[^\S\r\n]*([A-Z])[\.\):]+(?:\s+(.*))?$/; //updated to work with variable header information
   dxLines.forEach(line => {
     const match = line.match(sampleHeaderRegex);
     if (match) {
@@ -443,6 +675,7 @@ function parseShortDiagnosis(txt) {
   if (lower.includes("adenocarcinoma")) return "AdenoCA";
   if (lower.includes("asap"))          return "ASAP";
   if (lower.includes("hgpin"))         return "HGPIN";
+  if (lower.includes("high grade prostatic intraepithelial neoplasia"))          return "HGPIN";
   if (lower.includes("focal atypical small acinar proliferation"))          return "Focal ASAP";
   if (lower.includes("focal high grade prostatic intraepithelial neoplasia"))          return "Focal HGPIN";
   if (lower.includes("prostatitis"))   return "Prostatitis";
@@ -487,18 +720,89 @@ function parsePatternDistribution(txt) {
   return parts.join(", ");
 }
 
+//updated 2/10/2025
+  // Parse core lengths
 function parseCoreLengths(text) {
-  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+a?\s*(\d+)\s*mm\s*core/gi;
-  let match;
+  const lower = text.toLowerCase();
   const result = [];
-  while ((match = pattern.exec(text.toLowerCase())) !== null) {
-    const tumorMm = parseInt(match[1], 10);
-    const totalMm = parseInt(match[2], 10);
-    result.push({ tumorMm, totalMm });
+
+  // A) Pattern #1: "tumor measures X mm in a/an Y mm (core|cores|needle biopsies|prostate tissue)"
+  //    - We also optionally allow < in front of the tumor measurement
+  //    - The container group includes: core, cores, needle biopsies, prostate tissue
+ /*  const reStandard = new RegExp(
+    "tumor\\s+measures\\s*<?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*mm)?\\s+" +
+    "in\\s+a?n?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*mm)?\\s*" +
+    "(?:core|cores|needle\\s*biops(?:y|ies)|prostate\\s+tissue)",
+    "gi"
+  );
+ */
+  const reStandard = new RegExp(
+    "tumor\\s+measures\\s*<?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*mm)?\\s+" +
+    "(?:(?:in\\s+a?n?)|of)\\s*(\\d+(?:\\.\\d+)?)(?:\\s*mm)?\\s*" +
+    "(?:core|cores|needle\\s*biops(?:y|ies)|prostate\\s+tissue)",
+    "gi"
+  );
+  let match;
+  while ((match = reStandard.exec(lower)) !== null) {
+    // match[1] => tumor measurement
+    // match[2] => total measurement
+    const tumorVal = parseExactOrLess(match[1]);
+    
+    const totalVal = parseExact(match[2]);
+    console.log("Tumor Total: ", totalVal);
+    if (tumorVal != null && totalVal != null) {
+      result.push({ tumorMm: tumorVal, totalMm: totalVal });
+    }
   }
+
+  // B) Pattern #2: "tumor measures X mm in Y mm of fragmented cores"
+  //    e.g. "TUMOR MEASURES 3 MM IN 28 MM OF FRAGMENTED CORES"
+  //    Also allow optional < for the tumor measurement
+  const reFrag = /tumor\s+measures\s*<?\s*(\d+(?:\.\d+)?)(?:\s*mm)?\s+in\s+(\d+(?:\.\d+)?)(?:\s*mm)?\s+of\s+fragmented\s+cores/gi;
+  //const reFrag = /tumor\s+measures\s*<?\s*(\d+(?:\.\d+)?)\s*mm\s+(?:in\s+)?(\d+(?:\.\d+)?)\s*mm\s+(?:of\s+)?fragmented\s+cores?/gi;
+  while ((match = reFrag.exec(lower)) !== null) {
+    const tumorVal = parseExactOrLess(match[1]);
+    const totalVal = parseExact(match[2]);
+    if (tumorVal != null && totalVal != null) {
+      result.push({ tumorMm: tumorVal, totalMm: totalVal });
+    }
+  }
+
   return result;
 }
 
+/**
+ * parseExactOrLess(str):
+ *   If str is "3" => parseFloat=3
+ *   If str is "<3" => interpretLess(3) => e.g. 2.9 or 0.9 if <1, etc.
+ */
+function parseExactOrLess(str) {
+  const s = str.trim();
+  if (s.startsWith("<")) {
+    const numPart = s.slice(1).trim(); // remove "<"
+    return interpretLess(parseFloat(numPart));
+  }
+  return parseExact(s);
+}
+
+/**
+ * parseExact(str): parseFloat or null if invalid
+ */
+function parseExact(s) {
+  const val = parseFloat(s);
+  if (isNaN(val)) return null;
+  return val;
+}
+
+/**
+ * interpretLess(x): if x>=0.2 => x-0.1, else 0.1
+ * e.g. "<1 mm" => 0.9 mm
+ */
+function interpretLess(x) {
+  if (isNaN(x)) return null;
+  if (x >= 0.2) return x - 0.1;
+  return 0.1;
+}
 /*********************************************************************
  * finalizeSample
  *********************************************************************/
@@ -519,6 +823,8 @@ function finalizeSample(s) {
   // Existing parse/logic (unchanged)
   const dxShort = parseShortDiagnosis(diagText);
   const ggg = extractGradeGroup(diagText);
+
+
   const cpos = extractCoresPositive(diagText);
   const size = extractMaxCoreSize(diagText);
   const feats = parseAncillaryFeatures(diagText);
@@ -544,49 +850,167 @@ function finalizeSample(s) {
   };
 }
 
+//updated 2/7/2025
 function extractCoresPositive(text) {
   let m;
+  console.log(text);
+  // 1) "involving X of Y [partially] fragmented (cores|needle biopsies)";
+  m = text.match(
+    /involving\s*(\d+)\s*of\s*(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*(?:core|cores|prostatic tissue|needle\s*biopsies)/i
+  );
+  if (m) 
+    {
+      console.log("we matched 1");
+      return formatCores(m[1], m[2]);
+    }
+  // 2) "involving X/Y [partially] fragmented (cores|needle biopsies)"
+  m = text.match(
+    /involving\s*(\d+)\/(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*(?:core|cores|needle\s*biopsies)/i
+  );
+  if (m) 
+    {
+      console.log("we matched 2");
+      return formatCores(m[1], m[2]);
+    }
+  // 3) "X of Y [partially] fragmented (cores|needle biopsies)"
+  m = text.match(
+    /(\d+)\s*of\s*(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*(?:core|cores|needle\s*biopsies)/i
+  );
+  if (m) 
+    {
+      console.log("we matched 3");
+      return formatCores(m[1], m[2]);
+    }
 
-  // 1) "involving X of Y [partially] fragmented cores"
-  m = text.match(/involving\s*(\d+)\s*of\s*(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*cores/i);
-  if (m) return formatCores(m[1], m[2]);
+  // 4) "X/Y [partially] fragmented (cores|needle biopsies)"
+  m = text.match(
+    /(\d+)\/(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*(?:core|cores|needle\s*biopsies)/i
+  );
+  if (m) 
+    {
+      console.log("we matched 4");
+      return formatCores(m[1], m[2]);
+    }
+  // 5) "involving ALL CORES (X of X cores)"
+  //    e.g. "involving ALL CORES (4 of 4 cores, tumor measures ...)"
+  //    interpret => X/X
+ // const regex = /involving\s+all\s+cores\s*\(\s*(\d+)\s*of\s*(\d+)\s*(?:core|cores?)\s*\)/i;
+  m = text.match(/involving\s+all\s+cores\s*\(\s*(\d+)\s*of\s*(\d+)\s*(?:core|cores?)\s*\)/i);
+  if (m) {
+    console.log("we matched 5");
+    return formatCores(m[1], m[2]); // e.g. "4/4(100%)"
+  }
 
-  // 2) "involving X/Y [partially] fragmented cores"
-  m = text.match(/involving\s*(\d+)\/(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*cores/i);
-  if (m) return formatCores(m[1], m[2]);
+  // 6) "a small focus of adenocarcinoma" => interpret as 1/1
+  //    e.g. "A SMALL FOCUS OF PROSTATIC ADENOCARCINOMA..."
+  const lower = text.toLowerCase();
+  if (lower.includes("a small focus") && lower.includes("adenocarcinoma")) {
+    console.log("we matched");
+    return formatCores("1", "1"); 
+  }
 
-  // 3) "X of Y [partially] fragmented cores"
-  m = text.match(/(\d+)\s*of\s*(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*cores/i);
-  if (m) return formatCores(m[1], m[2]);
-
-  // 4) "X/Y [partially] fragmented cores"
-  m = text.match(/(\d+)\/(\d+)\s*(?:partially\s+fragmented|fragmented)?\s*cores/i);
-  if (m) return formatCores(m[1], m[2]);
+  // 7) Fallback => single line => "involving fragmented cores (tumor measures X mm in Y mm of fragmented cores)"
+  //    e.g. "INVOLVING FRAGMENTED CORES (TUMOR MEASURES 3 MM IN 28 MM OF FRAGMENTED CORES)"
+  //    interpret as "1/1(100%)"
+  const fallbackRegex = /INVOLVING FRAGMENTED CORES \(TUMOR MEASURES [\d\.]+ mm IN [\d\.]+ mm OF FRAGMENTED CORES\)/;
+  if (fallbackRegex.test(text)) {
+    console.log("we matched");
+    return formatCores("1", "1");
+  }
 
   // If no match is found
   return "N/A";
 }
 
 function formatCores(x, y) {
-  const X = parseInt(x, 10);
-  const Y = parseInt(y, 10);
+  const X = parseFloat(x);
+  const Y = parseFloat(y);
   if (!isNaN(X) && !isNaN(Y) && Y !== 0) {
-    const pct = Math.round((X / Y)*100);
+    const pct = Math.round((X / Y) * 100);
     return `${X}/${Y}(${pct}%)`;
   }
   return "N/A";
 }
 
+//updated 2/7/2025
 function extractMaxCoreSize(text) {
-  const pattern = /tumor\s+measures\s+(\d+)\s*mm\s+in\s+a?n?\s*(\d+)\s*mm\s*core/gi;
-  let match;
+  const lower = text.toLowerCase();
   let maxSize = null;
-  while ((match = pattern.exec(text.toLowerCase())) !== null) {
-    const sz = parseInt(match[1], 10);
-    if (maxSize === null || sz > maxSize) {
-      maxSize = sz;
+
+  // helper to update maxSize if bigger
+  function maybeUpdateMax(value) {
+    if (maxSize === null || value > maxSize) {
+      maxSize = value;
     }
   }
+
+  // A) Pattern A: "tumor measures X mm in a/an Y mm core/biops(y/ies)"
+  const reMeasures = /tumor\s+measures\s+(\d+(?:\.\d+)?)\s*mm\s+in\s+a?n?\s*(\d+(?:\.\d+)?)\s*mm\s*(?:core|cores|needle\s*biops(?:y|ies))?\b/gi;
+  let match;
+  while ((match = reMeasures.exec(lower)) !== null) {
+    maybeUpdateMax(parseFloat(match[1]));
+  }
+
+  // A2) Pattern A (less than): "tumor measures < X mm in a/an Y mm core..."
+  const reMeasuresLess = /tumor\s+measures\s*<\s*(\d+(?:\.\d+)?)\s*mm\s+in\s+a?n?\s*(\d+(?:\.\d+)?)\s*mm\s*(?:core|cores|needle\s*biops(?:y|ies))?\b/gi;
+  while ((match = reMeasuresLess.exec(lower)) !== null) {
+    let sizeVal = parseFloat(match[1]);
+    if (sizeVal >= 0.2) sizeVal -= 0.1;
+    else sizeVal = 0.1;
+    maybeUpdateMax(sizeVal);
+  }
+
+  // B) "X mm length of involvement is identified"
+  const reLength = /(\d+(?:\.\d+)?)\s*mm\s+(?:length\s+of\s+involvement)\b/gi;
+  while ((match = reLength.exec(lower)) !== null) {
+    maybeUpdateMax(parseFloat(match[1]));
+  }
+
+  // B2) "length of involvement < X mm"
+  const reLengthLess = /length\s+of\s+involvement\s*<\s*(\d+(?:\.\d+)?)/gi;
+  while ((match = reLengthLess.exec(lower)) !== null) {
+    let sizeVal = parseFloat(match[1]);
+    if (sizeVal >= 0.2) sizeVal -= 0.1;
+    else sizeVal = 0.1;
+    maybeUpdateMax(sizeVal);
+  }
+
+  // C) "tumor measures X mm in Y mm of fragmented cores"
+  const reFrag = /tumor\s+measures\s+(\d+(?:\.\d+)?)\s*mm\s+in\s+(\d+(?:\.\d+)?)\s*mm\s+of\s+fragmented\s+cores?/gi;
+  while ((match = reFrag.exec(lower)) !== null) {
+    maybeUpdateMax(parseFloat(match[1]));
+  }
+
+  // C2) "tumor measures < X mm in Y mm of fragmented cores"
+  const reFragLess = /tumor\s+measures\s*<\s*(\d+(?:\.\d+)?)\s*mm\s+in\s+(\d+(?:\.\d+)?)\s*mm\s+of\s+fragmented\s+cores?/gi;
+  while ((match = reFragLess.exec(lower)) !== null) {
+    let sizeVal = parseFloat(match[1]);
+    if (sizeVal >= 0.2) sizeVal -= 0.1;
+    else sizeVal = 0.1;
+    maybeUpdateMax(sizeVal);
+  }
+
+  // D) **NEW** Fallback #1 => "tumor measures X mm" (no "in a core")
+  //    e.g. "TUMOR MEASURES 2 MM" alone.
+  const reNoIn = /tumor\s+measures\s+(\d+(?:\.\d+)?)\s*mm\b/gi;
+  while ((match = reNoIn.exec(lower)) !== null) {
+    maybeUpdateMax(parseFloat(match[1]));
+  }
+
+  // D2) **NEW** Fallback #2 => "tumor measures < X mm" alone
+  //    e.g. "tumor measures < 1mm"
+  const reNoInLess = /tumor\s+measures\s*<\s*(\d+(?:\.\d+)?)\s*mm\b/gi;
+  while ((match = reNoInLess.exec(lower)) !== null) {
+    let sizeVal = parseFloat(match[1]);
+    if (sizeVal >= 0.2) {
+      sizeVal -= 0.1;
+    } else {
+      sizeVal = 0.1;
+    }
+    maybeUpdateMax(sizeVal);
+  }
+
+  // If no match => "N/A"
   if (maxSize === null) return "N/A";
   return `${maxSize}mm`;
 }
@@ -611,6 +1035,8 @@ function computePositiveCoresFromSamples(reportSamples) {
   let sumPos = 0;
   let target_count = 0;
   let foundAnyAdeno = false;
+  let cores_taken = parseInt(document.getElementById("numBx").value);
+
   reportSamples.forEach(s => {
     if (!s.diagnosis.toLowerCase().includes("adeno")) return;
     foundAnyAdeno = true;
@@ -648,43 +1074,100 @@ function computePositiveCoresFromSamples(reportSamples) {
   if (!foundAnyAdeno) {
     return { posCores: 0, totalCores: 14 };
   }
+/*   if(target_count>0)
+  {
+    document.getElementById("numBx").value = "12";
+    
+  } */
   return { posCores: sumPos, totalCores: 14+target_count };
 }
 
 function calcNCCNRiskGroup(psaRange, gg, tStage, posCores, totalCores) {
+  // 1) Convert grade group => approximate Gleason sum (if needed)
   const sumG = gradeGroupToGleasonSum(gg);
+  
+  // 2) parse T Stage => e.g. 3 if "T3a"
   const stageNum = parseTStageNumber(tStage);
-  const isPSAunder10 = (psaRange === "<10");
-  const isPSA10to20 = (psaRange === "10-20");
-  const isPSAover20 = (psaRange === ">20");
 
-  if (/^T3b/i.test(tStage) || /^T4/i.test(tStage)) {
+  // The user might enter a numeric PSA as "psaRange" or pick "<10", "10-20", ">20".
+  // We'll define custom_psa as a numeric if possible, else interpret the range
+  let custom_psa = 0;   // default if not numeric
+  if (typeof psaRange === "number") {
+    custom_psa = psaRange;  
+  } else {
+    // fallback if user used the preselect
+    if (psaRange === "<10") custom_psa = 5;   // approximate
+    else if (psaRange === "10-20") custom_psa = 15;
+    else if (psaRange === ">20") custom_psa = 25; // or a bigger guess
+  }
+
+  // Booleans for Very High factors:
+  // A) T3b or T4
+  const isT3bOrT4 = /^T3a/i.test(tStage) || /^T3b/i.test(tStage) || /^T4/i.test(tStage);
+  // B) GG >=4 => means GG=4 or 5
+  const isGG4or5 = (gg >= 4);
+  // C) PSA>=40
+  const isPSAover40 = (custom_psa >= 40);
+
+  // count how many are true => if >=2 => Very High
+  let countVH = 0;
+  if (isT3bOrT4)   countVH++;
+  if (isGG4or5)    countVH++;
+  if (isPSAover40) countVH++;
+
+  if (countVH >= 2) {
     return "Very High";
   }
-  if (gg >= 4 || stageNum >= 3 || isPSAover20) {
+
+  // Now let's define High risk => any one of (T3b/T4, GG>=4, PSA>20) 
+  // but not meeting the 2-factor threshold for Very High
+  // isPSAover20 => either user typed custom_psa>=20 or user picked >20
+  let isPSAover20 = false;
+  if (custom_psa >= 20) {
+    isPSAover20 = true;
+  } else if (psaRange === ">20") {
+    isPSAover20 = true;
+  }
+
+  if (isT3bOrT4 || isGG4or5 || isPSAover20) {
     return "High";
   }
+
+  // If not Very High or High, fall back to your original logic for Low/Intermediate
+  const isPSAunder10 = (psaRange === "<10");
+  const isPSA10to20 = (psaRange === "10-20");
+
+  // Very Low if T1c + GG=1 + PSA<10
+  if (stageNum <= 1 && gg === 1 && isPSAunder10 && /^T1c/i.test(tStage)) {
+    return "Very Low";
+  }
+  // Low if T1-2a, GG=1, PSA<10
   if (stageNum <= 2 && gg === 1 && isPSAunder10) {
-    if (/^T1c/i.test(tStage)) {
-      return "Very Low";
-    }
     return "Low";
   }
 
+  // Now handle Intermediate
   let irfCount = 0;
+  // IRF1 => PSA=10-20
   if (isPSA10to20) irfCount++;
+  // IRF2 => Stage T2b or T2c
   if (/^T2b/i.test(tStage) || /^T2c/i.test(tStage)) irfCount++;
+  // IRF3 => Grade Group 2 or 3
   if (gg === 2 || gg === 3) irfCount++;
 
+  // check if >=50% cores positive => helps define unfavorable
   let ratio = 0;
   if (totalCores > 0) {
     ratio = posCores / totalCores;
   }
-  const is50orMore = (ratio >= 0.5); //calculating intermediate unfavorable risk dz
+  const is50orMore = (ratio >= 0.5);
 
+  // If no IRFs => "Low" (fallback?), else we decide favorable vs unfavorable
   if (irfCount === 0) {
-    return "Low";
+    return "Low"; // or "N/A" etc.
   }
+
+  // Favorable if only 1 IRF, GG=1 or 2, <50% cores
   const meetsFavorable = (irfCount === 1 && (gg === 1 || gg === 2) && !is50orMore);
   if (meetsFavorable) {
     return "Intermediate - Favorable";
@@ -779,7 +1262,7 @@ function buildComparisonTable(allReports) {
       const cell = document.createElement("td");
       if (!sampleObj) {
         
-        cell.textContent = "N/A";
+        cell.textContent = " ";
       } else 
       {
   
@@ -918,6 +1401,16 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   document.getElementById("reportText").value = "";
   allReports = [];
   patientDob = null;
+  let overridePSA = false;
+let overrideDRE = false;
+  document.getElementById("psaSelect").value = "Auto";
+  document.getElementById("psaManualInput").value  = " ";
+  document.getElementById("numBx").value = "Auto";
+  document.getElementById("stageSelect").value = "Auto"
+
+  document.getElementById("nccn-output").style.display="none";
+  document.getElementById("comparisonTableWrapper").style.display = "none";
+  document.getElementById("calcnomodiv").style.display = "none"
 
   const thead = document.querySelector("#comparisonTable thead");
   const tbody = document.querySelector("#comparisonTable tbody");
@@ -928,7 +1421,7 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   document.getElementById("nccnRiskResult").textContent = "N/A";
   document.getElementById("riskDetails").textContent = "(PSA=?, Gleason=?, Stage=?)";
 
-  const nomoDiv = document.getElementById("nomogramSection");
+  const nomoDiv = document.getElementById("nomogramDiv");
   if (nomoDiv) nomoDiv.style.display = "none";
 
   document.getElementById("ageInput").value = "";

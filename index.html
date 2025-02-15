@@ -7,16 +7,20 @@
 </head>
 <body>
   <div class="container">
+ 
     <h2>Prostate Biopsy Path Tool and MSK Nomogram</h2>
+    
 
     <!-- Section: PSA range & T stage -->
     <div class="nccn-inputs">
-      <label for="psaSelect">PSA Range:</label>
+      <label for="psaSelect">Enter PSA or select range from dropdown</label>
       <select id="psaSelect">
+        <option value="Auto" default>Auto</option>
+        <option value="PSA">Enter PSA</option>
         <option value="<10"><10</option>
         <option value="10-20">10-20</option>
         <option value=">20">>20</option>
-        <option value="PSA">Enter PSA</option>
+        
       </select>
       
       <input 
@@ -25,12 +29,14 @@
       min="0.1" 
       max="999.9" 
       id="psaManualInput" 
-      placeholder="Enter PSA" 
-      style="display:none; margin-left:10px;"/>
+      disabled
+     
+      />
       
 
       <label for="stageSelect">Clinical T Stage:</label>
       <select id="stageSelect">
+        <option value="Auto" default>Auto</option>
         <option value="T1c">T1c</option>
         <option value="T2a">T2a</option>
         <option value="T2b">T2b</option>
@@ -39,8 +45,15 @@
         <option value="T3b">T3b</option>
         <option value="T4">T4</option>
       </select>
-    </div>
 
+      <label for="numBx">Number of Cores:</label>
+      <select id="numBx">
+        <option value="Auto" default>Auto</option>
+        <option value="14">14</option>
+        <option value="12">12</option>
+      </select>
+    </div>
+  
     <!-- Textarea for multiple reports -->
     <div class="report-input-section">
       <textarea id="reportText" placeholder="Paste biopsy report(s) here..."></textarea>
@@ -50,7 +63,7 @@
 
 
     <!-- Summaries -->
-    <div class="nccn-output">
+    <div id ="nccn-output" class="nccn-output" style="display:none">
       <strong>Patient DOB:</strong> 
       <span id="dobSpan">N/A</span>
       &nbsp;&nbsp;&nbsp; 
@@ -59,34 +72,31 @@
       &nbsp;&nbsp; 
       <span id="riskDetails">(PSA=?, Gleason=?, Stage=?)</span>
     </div>
-
+   
+    <div id="comparisonTableWrapper" style="display:none">
   
-
-    <h2>Comparison Table</h2>
-    <p style="font-size: 13px; font-style: italic;">
-      Select which biopsy date to use for the nomogram by clicking the radio button 
-      in the header row. Then click <strong>“Calculate Nomogram”</strong> below.
-    </p>
-    <div id="comparisonTableWrapper">
       <table id="comparisonTable">
         <thead></thead>
         <tbody></tbody>
       </table>
+     
     </div>
-    <!-- ... your existing HTML (table, buttons, etc.) ... -->
+    <div id = "calcnomodiv"style="margin-top: 10px;display:none" >
+      <button id="calcNomogramBtn">Calculate Nomogram</button>
+      <input type="checkbox" id="nogg1" value="nogg1">
+      <label for="nogg1">Remove GG1 from Nomogram</label>
+    </div>
 
 <!-- The absolute-positioned popup for showing cores on hover -->
 <div id="coresPopup"></div>
 
-    <div style="margin-top: 10px;">
-      <button id="calcNomogramBtn">Calculate Nomogram</button>
-    </div>
+  
 
 
     <div id="nomogramDiv" style="display:none">
 
       <h2>Pre-Radical Prostatectomy Nomogram</h2>
-  <!-- PART A: Basic Input -->
+ 
   <div class="field">
     <label>Currently on Hormone Therapy?</label>
     <select id="hormoneTherapy">
@@ -163,8 +173,6 @@
   <script src="app.js"></script>
   <script src="nomogram.js"></script>
 
-  <!-- ... your existing HTML ... -->
-<!-- Add a modal container somewhere near the bottom of the body -->
 <div id="barsModal" class="modal">
   <div id="barsModalContent" class="modal-content"></div>
 </div>
