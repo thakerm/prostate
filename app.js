@@ -6,6 +6,7 @@ let allReports = [];
 let patientDob = null;
 let overridePSA = false;
 let overrideDRE = false;
+let overrideCore = false;
 
 //NCCN risk order function
 const RISK_ORDER = {
@@ -73,6 +74,12 @@ document.getElementById("psaSelect").addEventListener("change", function() {
   
 });
 
+// Attach event listeners for both the button and the checkbox
+//document.getElementById("calcNomogramBtn").addEventListener("click", updateNomogram);
+document.getElementById("nogg1").addEventListener("change", updateNomogram);
+
+
+
 // "Custom DRE/Stage event listener"
 document.getElementById("stageSelect").addEventListener("change", function() {
   const val = this.value;  // e.g. "Auto", "T1c", "T2", etc.
@@ -81,6 +88,16 @@ document.getElementById("stageSelect").addEventListener("change", function() {
     overrideDRE = false;
   } else {
     overrideDRE = true;
+  }
+});
+
+document.getElementById("numBx").addEventListener("change", function() {
+  const val = this.value;  // e.g. "Auto", "12", "14", etc.
+  
+  if (val === "Auto") {
+    overrideCore = false;
+  } else {
+    overrideCore = true;
   }
 });
 
@@ -174,28 +191,29 @@ function parseExtraData(reportText) {
   for (const line of lines) {
     // A) Number of Template Cores
     let m = line.match(reTemplates);
-    if (m) {
+    if (m && overrideCore===false) {
       numTemplates = parseInt(m[1], 10);  // e.g., "12"
       document.getElementById("numBx").value = numTemplates;
       continue;
     }
-    else{
+   /*  else{
       document.getElementById("numBx").value = "14";
-    }
-
-    // B) DRE
-    m = line.match(reDre);
-    if (m) {
-      dre = m[1];  // e.g., "T1c"
-      if (overrideDRE === false)
-      {
-          document.getElementById("stageSelect").value = dre;
-      }
-      continue;
-    }
-    else{
-      document.getElementById("stageSelect").value  = "T1c";
-    }
+    } */
+// B) DRE
+m = line.match(reDre);
+if (m) {
+  dre = m[1];  // e.g., "T1c"
+  if (!overrideDRE) {
+    document.getElementById("stageSelect").value = dre;
+  }
+  continue;
+} else {
+  // Only override to "T1c" if the user hasn't manually selected a stage.
+  const stageSelectElement = document.getElementById("stageSelect");
+  if (!overrideDRE && (stageSelectElement.value === "Auto" || stageSelectElement.value.trim() === "")) {
+    stageSelectElement.value = "T1c";
+  }
+}
 
     // C) PSA lines
     m = line.match(rePSA);
@@ -231,17 +249,23 @@ function parseExtraData(reportText) {
       latestPSADate = first.dateStr;
     }
   }
- if(overridePSA===false && latestPSA)
- {
-  document.getElementById("psaManualInput").value = latestPSA;
- }
- else
- {
-  document.getElementById("psaSelect").value = "PSA";
-  psaInput.disabled = false;
- }
-
-
+ // const psaInput = document.getElementById("psaManualInput");
+  // Only auto-update if the user hasn't overridden PSA and the input is still blank or default.
+  if (!overridePSA && (psaInput.value.trim() === "" || psaInput.value === "Auto")) {
+    if (latestPSA) {
+      psaInput.value = latestPSA;
+    } else {
+      // If no PSA was found, force manual entry
+      document.getElementById("psaSelect").value = "PSA";
+      psaInput.disabled = false;
+/*       // Optionally, show the snackbar to notify the user.
+      var x = document.getElementById("snackbar");
+      x.className = "show";
+      setTimeout(function() {
+        x.className = x.className.replace("show", "");
+      }, 3000); */
+    }
+  }
 }
 
 // Helper to parse "MM/DD/YYYY" => a Date object
@@ -313,6 +337,10 @@ document.getElementById("processBtn").addEventListener("click", () => {
   sortReportsByDateDesc(allReports);
   buildComparisonTable(allReports);
 
+  document.querySelectorAll(".nomogram-radio").forEach(radio => {
+    radio.addEventListener("change", updateNomogram);
+  });
+
   if (allReports.length > 0) {
     const highestRisk = getHighestNccnRisk(allReports);
     document.getElementById("dobSpan").textContent = patientDob || "N/A";
@@ -328,28 +356,35 @@ document.getElementById("processBtn").addEventListener("click", () => {
     document.getElementById("nccnRiskResult").textContent = "N/A";
     document.getElementById("riskDetails").textContent = "(PSA=?, Gleason=?, Stage=?)";
   }
+  updateNomogram();
 });
+
+//i am not sure if this is the correct logic?
 function adjustCoresForGg1(report) {
   let adjustedPos = 0;
-  let adjustedTotal = 0;
+  
   report.samples.forEach(sample => {
-    // Only include samples that are not GG1.
-    if (sample.gradeGroup > 1 && sample.coresPositive && sample.coresPositive !== "N/A") {
-      // Expecting coresPositive to be formatted like "1/1(100%)"
+    const diag = sample.diagnosis.toLowerCase();
+    // Only count the sample if it indicates adenocarcinoma and has a grade group above 1,
+    // and there is a valid coresPositive string.
+    if (diag.includes("adenoca") && sample.gradeGroup > 1 && sample.coresPositive && sample.coresPositive !== "N/A") {
+      // Expecting coresPositive to be formatted like "2/3(67%)" or "2/3"
       const match = sample.coresPositive.match(/^(\d+)\s*\/\s*(\d+)/);
       if (match) {
-        adjustedPos += parseInt(match[1], 10);
-        adjustedTotal += parseInt(match[2], 10);
+        const pos = parseInt(match[1], 10);
+        adjustedPos += pos;
       }
     }
   });
-  return { posCores: adjustedPos, totalCores: adjustedTotal };
+
+  return { posCores: adjustedPos, totalCores: adjustedPos };
 }
 function updateNomogram() {
-  // (Your existing calculate nomogram code here)
+  // Show the nomogram section
   const nomogramDiv = document.getElementById("nomogramDiv");
   nomogramDiv.style.display = "block";
   
+  // Determine which report (biopsy date) is chosen
   const radios = document.querySelectorAll(".nomogram-radio");
   let chosenIndex = -1;
   radios.forEach(r => {
@@ -369,7 +404,8 @@ function updateNomogram() {
   const chosenReport = allReports[chosenIndex];
   const gg = chosenReport.maxGradeGroup || 1;
   
-  // Here you can conditionally update the core counts based on the checkbox
+  // Get the core counts from the report.
+  // If "Remove GG1" is checked, use our adjusted logic; otherwise, use the reported values.
   let posCores, totalCores;
   if (document.getElementById("nogg1").checked) {
     const adjusted = adjustCoresForGg1(chosenReport);
@@ -379,6 +415,25 @@ function updateNomogram() {
     posCores = chosenReport.posCores;
     totalCores = chosenReport.totalCores;
   }
+  
+  // Count how many target samples are in the report.
+  // (Our parse/finishing logic already sets sample.isTarget for target samples.)
+  let targetCount = 0;
+  chosenReport.samples.forEach(sample => {
+    if (sample.isTarget) {
+      targetCount++;
+    }
+  });
+  
+  // If the user has overridden the core count, we use the manual number for non-target cores
+  // and then add the target cores (each target counts as 1).
+  const numBxElement = document.getElementById("numBx");
+  if (overrideCore && numBxElement.value !== "Auto") {
+    const manualNonTarget = parseInt(numBxElement.value, 10);
+    totalCores = manualNonTarget + targetCount;
+  }
+  
+  // Compute negative cores as total minus positive.
   const negCores = totalCores - posCores;
   
   let ageForNomogram = 65;
@@ -389,6 +444,7 @@ function updateNomogram() {
     }
   }
   
+  // Normalize stage for nomogram using regex matching
   let stageForNomogram = "T1";
   if (/^T2a/i.test(tStage)) stageForNomogram = "T2a";
   else if (/^T2b/i.test(tStage)) stageForNomogram = "T2b";
@@ -410,70 +466,6 @@ function updateNomogram() {
     alert("setNomogramData not found.");
   }
 }
-
-// Attach event listeners for both the button and the checkbox
-document.getElementById("calcNomogramBtn").addEventListener("click", updateNomogram);
-document.getElementById("nogg1").addEventListener("change", updateNomogram);
-
-/*********************************************************************
- * EVENT: "Calculate Nomogram"
- *********************************************************************/
-/* document.getElementById("calcNomogramBtn").addEventListener("click", () => {
-  const nomogramDiv = document.getElementById("nomogramDiv");
-  nomogramDiv.style.display = "block";
-  const radios = document.querySelectorAll(".nomogram-radio");
-  let chosenIndex = -1;
-  radios.forEach(r => {
-    if (r.checked) {
-      chosenIndex = parseInt(r.value, 10);
-    }
-  });
-  if (chosenIndex < 0 || !allReports[chosenIndex]) {
-    alert("Please select which biopsy date to use for the nomogram first.");
-    return;
-  }
-
-  const psaRange = document.getElementById("psaSelect").value;
-  const numericPSA = mapPsaRangeToNumeric(psaRange);
-  const tStage = document.getElementById("stageSelect").value;
-
-  const chosenReport = allReports[chosenIndex];
-  const gg = chosenReport.maxGradeGroup || 1;
-  const gleasonSum = gradeGroupToGleasonSum(gg);
-
-  const posCores = chosenReport.posCores;
-  const totalCores = chosenReport.totalCores;
-  const negCores = totalCores - posCores;
-
-  let ageForNomogram = 65;
-  if (patientDob) {
-    const possibleAge = calcAgeFromDob(patientDob);
-    if (possibleAge && possibleAge > 0) {
-      ageForNomogram = possibleAge;
-    }
-  }
-
-  let stageForNomogram = "T1";
-  if (/^T2a/i.test(tStage)) stageForNomogram = "T2a";
-  else if (/^T2b/i.test(tStage)) stageForNomogram = "T2b";
-  else if (/^T2c/i.test(tStage)) stageForNomogram = "T2c";
-  else if (/^T3/i.test(tStage))  stageForNomogram = "T3";
-
-  if (typeof setNomogramData === "function") {
-    setNomogramData({
-      age: ageForNomogram,
-      psa: numericPSA,
-      ggg: gg,
-      stage: stageForNomogram,
-      posCores,
-      negCores,
-      hormoneTherapy: "No",
-      radiationTherapy: "No"
-    });
-  } else {
-    alert("setNomogramData not found.");
-  }
-}); */
 
 /*********************************************************************
  * chunkReports, parseCollectedDate, parseDob, ...
@@ -803,6 +795,7 @@ function interpretLess(x) {
   if (x >= 0.2) return x - 0.1;
   return 0.1;
 }
+
 /*********************************************************************
  * finalizeSample
  *********************************************************************/
@@ -1035,11 +1028,12 @@ function computePositiveCoresFromSamples(reportSamples) {
   let sumPos = 0;
   let target_count = 0;
   let foundAnyAdeno = false;
-  let cores_taken = parseInt(document.getElementById("numBx").value);
 
   reportSamples.forEach(s => {
+    // Only process samples with adenocarcinoma in the diagnosis
     if (!s.diagnosis.toLowerCase().includes("adeno")) return;
     foundAnyAdeno = true;
+    // If no valid coresPositive string is present, skip this sample
     if (!s.coresPositive || s.coresPositive === "N/A") return;
 
     const match = s.coresPositive.match(/^(\d+)\/(\d+)/);
@@ -1047,6 +1041,7 @@ function computePositiveCoresFromSamples(reportSamples) {
     let x = parseInt(match[1], 10);
     let y = parseInt(match[2], 10);
 
+    // Determine the maximum cores expected based on the sample's location
     function getMaxCoresForLocation(loc) {
       if (loc.includes("target")) return 1;
       if (loc.includes("apex")) return 3;
@@ -1057,29 +1052,35 @@ function computePositiveCoresFromSamples(reportSamples) {
     const locLower = s.location.toLowerCase();
     const maxSite = getMaxCoresForLocation(locLower);
 
+    // For target samples, force the count to 1 core per sample
     if (locLower.includes("target")) {
       target_count++;
       if (x > 0) {
-        x = 1; y = 1;
+        x = 1; 
+        y = 1;
       } else {
-        x = 0; y = 1;
+        x = 0; 
+        y = 1;
       }
     } else {
+      // Ensure that the reported total does not exceed the maximum expected for that site
       if (y > maxSite) y = maxSite;
       if (x > y) x = y;
     }
     sumPos += x;
-    console.log("SumPost: ", sumPos)
   });
+
+  // If no adenocarcinoma cores are found,
+  // default the total cores to 14 for a standard biopsy,
+  // or 12 if there are target cores.
   if (!foundAnyAdeno) {
-    return { posCores: 0, totalCores: 14 };
+    let defaultTotal = (target_count > 0) ? 12 : 14;
+    return { posCores: 0, totalCores: defaultTotal };
   }
-/*   if(target_count>0)
-  {
-    document.getElementById("numBx").value = "12";
-    
-  } */
-  return { posCores: sumPos, totalCores: 14+target_count };
+
+  // Otherwise, use the computed sum for positive cores.
+  // (This logic can be adjusted as needed if a different total is desired.)
+  return { posCores: sumPos, totalCores: 14 + target_count };
 }
 
 function calcNCCNRiskGroup(psaRange, gg, tStage, posCores, totalCores) {
@@ -1401,10 +1402,12 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   document.getElementById("reportText").value = "";
   allReports = [];
   patientDob = null;
-  let overridePSA = false;
-let overrideDRE = false;
+  overridePSA = false;
+  overrideDRE = false;
+  overrideCore = false;
   document.getElementById("psaSelect").value = "Auto";
-  document.getElementById("psaManualInput").value  = " ";
+  document.getElementById("psaManualInput").value  = "";
+  document.getElementById("psaManualInput").disabled = true;
   document.getElementById("numBx").value = "Auto";
   document.getElementById("stageSelect").value = "Auto"
 
@@ -1427,7 +1430,7 @@ let overrideDRE = false;
   document.getElementById("ageInput").value = "";
   document.getElementById("psaInput").value = "";
   document.getElementById("gggSelect").value = "1";
-  document.getElementById("stageSelectNom").value = "T1";
+  document.getElementById("stageSelect_nomogram").value = "T1";
   document.getElementById("posCoresInput").value = "";
   document.getElementById("negCoresInput").value = "";
   document.getElementById("hormoneTherapy").value = "No";
